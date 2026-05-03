@@ -69,20 +69,20 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		CE9929AF2F71851800EE3029 /* Frameworks */ = {
-			isa = PBXGroup;
-			children = (
-				CE30A0B52F71A7F8006A3998 /* MediaRemote.framework */,
-			);
-			name = Frameworks;
-			sourceTree = "<group>";
-		};
 		CE5CF1012F7F000100B82701 /* Config */ = {
 			isa = PBXGroup;
 			children = (
 				CE5CF1002F7F000100B82701 /* Info.plist */,
 			);
 			path = Config;
+			sourceTree = "<group>";
+		};
+		CE9929AF2F71851800EE3029 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				CE30A0B52F71A7F8006A3998 /* MediaRemote.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 		CEDD2D602F6772D000574141 = {
@@ -320,7 +320,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = 9M69D4JTGX;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -353,7 +353,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				MARKETING_VERSION = 1.0.1;
+				MARKETING_VERSION = 1.0.2;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-framework",
@@ -391,7 +391,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = 9M69D4JTGX;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -424,7 +424,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				MARKETING_VERSION = 1.0.1;
+				MARKETING_VERSION = 1.0.2;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-framework",
