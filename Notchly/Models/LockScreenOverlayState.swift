@@ -1,0 +1,18 @@
+//
+//  LockScreenOverlayState.swift
+//  Notchly
+//
+//  Created by user on 03.05.2026.
+//
+
+import Combine
+
+enum LockScreenOverlayState: Equatable {
+    case locked
+    case music
+}
+
+@MainActor
+final class LockScreenOverlayModel: ObservableObject {
+    @Published var state: LockScreenOverlayState = .music
+}
