@@ -56,6 +56,7 @@ extension ContentView {
                     sourceName: musicManager.sourceName,
                     isPlaying: musicManager.isPlaying,
                     isShuffleEnabled: musicManager.isShuffleEnabled,
+                    isShuffleControlAvailable: musicManager.isShuffleControlAvailable,
                     isLivestream: isLivestream,
                     waveformColor: musicManager.waveformColor,
                     playbackPositionText: formatPlaybackTime(musicManager.playbackPosition / 1000),

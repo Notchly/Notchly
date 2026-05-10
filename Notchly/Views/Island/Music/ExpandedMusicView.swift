@@ -16,6 +16,7 @@ struct ExpandedMusicView: View {
     let sourceName: String
     let isPlaying: Bool
     let isShuffleEnabled: Bool
+    let isShuffleControlAvailable: Bool
     let isLivestream: Bool
     let waveformColor: Color
     let playbackPositionText: String
@@ -56,7 +57,11 @@ struct ExpandedMusicView: View {
     }
 
     private var shuffleIconColor: Color {
-        isShuffleEnabled ? waveformColor : .white.opacity(0.68)
+        guard isShuffleControlAvailable else {
+            return .white.opacity(0.28)
+        }
+
+        return isShuffleEnabled ? waveformColor : .white.opacity(0.68)
     }
 
     var body: some View {
@@ -159,9 +164,9 @@ struct ExpandedMusicView: View {
                             .foregroundStyle(shuffleIconColor)
                             .contentTransition(.symbolEffect(.replace))
                     }
-                    .disabled(isLivestream)
+                    .disabled(isLivestream || !isShuffleControlAvailable)
                     .buttonStyle(IslandControlButtonStyle())
-                    .opacity(isLivestream ? 0.4 : 1.0)
+                    .opacity((isLivestream || !isShuffleControlAvailable) ? 0.4 : 1.0)
 
                     Button(action: onPrevious) {
                         Image(systemName: "backward.fill")

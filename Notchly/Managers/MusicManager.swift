@@ -40,6 +40,10 @@ final class MusicManager: ObservableObject {
         currentSource != .none && (!trackTitle.isEmpty || !artistName.isEmpty || !albumTitle.isEmpty)
     }
 
+    @MainActor var isShuffleControlAvailable: Bool {
+        currentSource == .spotify || currentSource == .appleMusic
+    }
+
     nonisolated private let mediaController = MediaController()
     private var progressTimer: Timer?
     private var volumePollTimer: Timer?
@@ -185,7 +189,9 @@ final class MusicManager: ObservableObject {
         albumTitle = newAlbumTitle
         isPlaying = playing
         durationMs = newDurationMs
-        isShuffleEnabled = resolvedShuffleEnabled((payload.shuffleMode ?? .off) != .off)
+        isShuffleEnabled = isShuffleAvailable(for: newSource)
+            ? resolvedShuffleEnabled((payload.shuffleMode ?? .off) != .off)
+            : false
 
         basePlaybackPosition = elapsedMs
         baseSyncDate = Date()
@@ -343,6 +349,10 @@ final class MusicManager: ObservableObject {
         allowSpotifyAppleScript: Bool,
         allowAppleMusicAppleScript: Bool
     ) {
+        guard isShuffleControlAvailable else {
+            return
+        }
+
         let wasShuffleEnabled = isShuffleEnabled
         let shouldEnableShuffle = !(pendingShuffleState ?? isShuffleEnabled)
 
@@ -372,8 +382,11 @@ final class MusicManager: ObservableObject {
                 ignoreTransientZeroProgressUntil = Date().addingTimeInterval(6.0)
             }
 
-        default:
+        case .spotify, .appleMusic:
             mediaController.setShuffleMode(shouldEnableShuffle ? .songs : .off)
+
+        default:
+            break
         }
     }
 
@@ -577,6 +590,10 @@ final class MusicManager: ObservableObject {
         default:
             return .system
         }
+    }
+
+    private func isShuffleAvailable(for source: MusicSource) -> Bool {
+        source == .spotify || source == .appleMusic
     }
 
     private func prettySourceName(from bundleIdentifier: String) -> String {
