@@ -14,6 +14,7 @@ xcuserdata/
 *.xccheckout
 *.moved-aside
 *.xcuserstate
+.idea
 
 # Swift Package Manager
 .build/
