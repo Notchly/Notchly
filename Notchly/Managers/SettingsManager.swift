@@ -31,6 +31,14 @@ final class SettingsManager: ObservableObject {
         didSet {UserDefaults.standard.set(musicPreviewDuration, forKey: "musicPreviewDuration")}
     }
 
+    @Published var enableSpotifyAppleScriptControl: Bool {
+        didSet { UserDefaults.standard.set(enableSpotifyAppleScriptControl, forKey: "enableSpotifyAppleScriptControl") }
+    }
+
+    @Published var enableAppleMusicAppleScriptControl: Bool {
+        didSet { UserDefaults.standard.set(enableAppleMusicAppleScriptControl, forKey: "enableAppleMusicAppleScriptControl") }
+    }
+
     @Published var launchAtLogin: Bool {
         didSet {
             UserDefaults.standard.set(launchAtLogin, forKey: "launchAtLogin")
@@ -48,6 +56,8 @@ final class SettingsManager: ObservableObject {
         self.showOnPrimaryDisplayOnly = UserDefaults.standard.object(forKey: "showOnPrimaryDisplayOnly") as? Bool ?? true
         self.lowBatteryThreshold = UserDefaults.standard.object(forKey: "lowBatteryThreshold") as? Int ?? 20
         self.musicPreviewDuration = UserDefaults.standard.object(forKey: "musicPreviewDuration") as? Double ?? 2
+        self.enableSpotifyAppleScriptControl = UserDefaults.standard.object(forKey: "enableSpotifyAppleScriptControl") as? Bool ?? false
+        self.enableAppleMusicAppleScriptControl = UserDefaults.standard.object(forKey: "enableAppleMusicAppleScriptControl") as? Bool ?? false
 
         let savedLaunchAtLogin = UserDefaults.standard.object(forKey: "launchAtLogin") as? Bool
         let systemLaunchAtLogin = SMAppService.mainApp.status == .enabled
@@ -67,8 +77,6 @@ final class SettingsManager: ObservableObject {
                 try SMAppService.mainApp.unregister()
             }
         } catch {
-            print("LaunchAtLogin error:", error.localizedDescription)
-
             let actual = SMAppService.mainApp.status == .enabled
             if launchAtLogin != actual {
                 launchAtLogin = actual

@@ -14,6 +14,7 @@ extension ContentView {
             status: status,
             isMusicModule: dynamicManager.currentModule == .music,
             showChargingPop: showChargingPop,
+            isMusicVolumeControlExpanded: showMusicVolumeControl,
             closedHeight: closedHeight
         )
     }

@@ -11,6 +11,7 @@ struct IslandLayout {
     let status: IslandStatus
     let isMusicModule: Bool
     let showChargingPop: Bool
+    let isMusicVolumeControlExpanded: Bool
     let closedHeight: CGFloat
 
     let spacing: CGFloat = 10
@@ -24,7 +25,7 @@ struct IslandLayout {
     }
 
     var musicOpenedSize: CGSize {
-        CGSize(width: 318, height: 190)
+        CGSize(width: 318, height: isMusicVolumeControlExpanded ? 228 : 190)
     }
 
     var musicPreviewSize: CGSize {

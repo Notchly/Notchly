@@ -55,11 +55,15 @@ extension ContentView {
                     artist: musicManager.artistName,
                     sourceName: musicManager.sourceName,
                     isPlaying: musicManager.isPlaying,
+                    isShuffleEnabled: musicManager.isShuffleEnabled,
                     isLivestream: isLivestream,
                     waveformColor: musicManager.waveformColor,
                     playbackPositionText: formatPlaybackTime(musicManager.playbackPosition / 1000),
                     durationText: formatPlaybackTime(musicManager.durationMs / 1000),
                     progress: musicProgress,
+                    outputVolume: musicManager.outputVolume,
+                    isOutputMuted: musicManager.isOutputMuted,
+                    isVolumeControlExpanded: showMusicVolumeControl,
                     size: layout.musicOpenedSize,
                     playPauseBounce: playPauseBounce,
                     onPreviewSeek: { progress in
@@ -67,6 +71,23 @@ extension ContentView {
                     },
                     onSeek: { progress in
                         musicManager.seek(toProgress: progress)
+                    },
+                    onVolumeChange: { volume in
+                        musicManager.setOutputVolume(volume)
+                    },
+                    onToggleMute: {
+                        musicManager.toggleOutputMute()
+                    },
+                    onToggleVolumeControl: {
+                        withAnimation(animation) {
+                            showMusicVolumeControl.toggle()
+                        }
+                    },
+                    onToggleShuffle: {
+                        musicManager.toggleShuffle(
+                            allowSpotifyAppleScript: settingsManager.enableSpotifyAppleScriptControl,
+                            allowAppleMusicAppleScript: settingsManager.enableAppleMusicAppleScriptControl
+                        )
                     },
                     onPrevious: {
                         Task { await musicManager.previousTrack() }

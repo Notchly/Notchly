@@ -25,6 +25,7 @@ struct ContentView: View {
     @State var isPointerInsideIsland = false
     @State var playPauseBounce = false
     @State var skipIndicator: String?
+    @State var showMusicVolumeControl = false
     @State var currentScreen: NSScreen?
     @State var resolvedClosedHeight: CGFloat = 36
     
@@ -56,8 +57,13 @@ struct ContentView: View {
         .onChange(of: currentMusicAutoOpenKey) { _, _ in
             handleMusicAutoExpand(isPlaying: musicManager.isPlaying)
         }
+        .onChange(of: status) { _, newValue in
+            guard newValue != .opened else { return }
+            showMusicVolumeControl = false
+        }
         .animation(.interactiveSpring(duration: 0.32, extraBounce: 0.03), value: isHovered)
         .animation(animation, value: status)
+        .animation(animation, value: showMusicVolumeControl)
         .animation(.easeInOut(duration: 0.22), value: batteryManager.batteryLevel)
         .preferredColorScheme(.dark)
         .background(
