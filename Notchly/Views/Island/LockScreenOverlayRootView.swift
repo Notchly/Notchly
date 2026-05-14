@@ -18,6 +18,7 @@ struct LockScreenOverlayRootView: View {
 
     @State private var displayedState: LockScreenOverlayState = .locked
     @State private var isUnlocking = false
+    @State private var showLockScreenPlayer = true
     @State private var showOpenedLock = false
     @State private var openLockTask: DispatchWorkItem?
     @State private var completeTask: DispatchWorkItem?
@@ -31,35 +32,64 @@ struct LockScreenOverlayRootView: View {
 
     private let unlockAnimationDuration: TimeInterval = 0.18
 
+    private var lockScreenPlayerYPosition: CGFloat {
+        min(max(screenSize.height * 0.68, 500), screenSize.height - 130)
+    }
+
+    private var isRegularIslandVisible: Bool {
+        displayedState == .music
+    }
+
+    private var isLockScreenPlayerVisible: Bool {
+        displayedState == .locked && showLockScreenPlayer
+    }
+
     var body: some View {
         ZStack(alignment: .top) {
             Color.clear
 
-            if displayedState == .locked {
-                LockScreenIslandView(
-                    height: resolvedClosedHeight,
-                    isUnlocking: isUnlocking,
-                    showOpenedLock: showOpenedLock
+            ContentView(
+                batteryManager: batteryManager,
+                settingsManager: settingsManager,
+                dynamicManager: dynamicManager,
+                musicManager: musicManager,
+                animationsEnabled: isRegularIslandVisible
+            )
+            .padding(.top, 0)
+            .opacity(isRegularIslandVisible ? 1 : 0)
+            .allowsHitTesting(isRegularIslandVisible)
+            .accessibilityHidden(!isRegularIslandVisible)
+            .zIndex(isRegularIslandVisible ? 2 : -1)
+
+            if settingsManager.showMusic && musicManager.hasNowPlayingContent {
+                LockScreenMusicPlayerView(
+                    musicManager: musicManager,
+                    isVisible: isLockScreenPlayerVisible
                 )
-                .padding(.top, 0)
-                .transition(.opacity)
+                .position(x: screenSize.width / 2, y: lockScreenPlayerYPosition)
+                .opacity(isLockScreenPlayerVisible ? 1 : 0)
+                .scaleEffect(isLockScreenPlayerVisible ? 1 : 0.96)
+                .offset(y: isLockScreenPlayerVisible ? 0 : 18)
+                .allowsHitTesting(isLockScreenPlayerVisible)
+                .zIndex(0)
             }
 
-            if displayedState == .music {
-                ContentView(
-                    batteryManager: batteryManager,
-                    settingsManager: settingsManager,
-                    dynamicManager: dynamicManager,
-                    musicManager: musicManager
-                )
-                .padding(.top, 0)
-                .transition(.opacity)
-            }
+            LockScreenIslandView(
+                height: resolvedClosedHeight,
+                isUnlocking: isUnlocking,
+                showOpenedLock: showOpenedLock
+            )
+            .padding(.top, 0)
+            .opacity(displayedState == .locked ? 1 : 0)
+            .allowsHitTesting(false)
+            .zIndex(displayedState == .locked ? 3 : 1)
         }
         .frame(width: screenSize.width, height: screenSize.height)
         .animation(.easeOut(duration: 0.16), value: displayedState)
+        .animation(.easeOut(duration: 0.12), value: showLockScreenPlayer)
         .onAppear {
             displayedState = model.state
+            showLockScreenPlayer = model.state == .locked
             lastHandledState = model.state
             updateClosedHeight(for: currentScreen)
         }
@@ -70,7 +100,11 @@ struct LockScreenOverlayRootView: View {
             updateClosedHeight(for: currentScreen)
         }
         .onReceive(NotificationCenter.default.publisher(for: NSWorkspace.sessionDidBecomeActiveNotification)) { _ in
+            hideLockScreenPlayerForUnlock()
             updateClosedHeight(for: currentScreen)
+        }
+        .onReceive(DistributedNotificationCenter.default().publisher(for: NSNotification.Name("com.apple.screenIsUnlocked"))) { _ in
+            hideLockScreenPlayerForUnlock()
         }
         .onDisappear {
             cancelPendingTasks()
@@ -99,12 +133,15 @@ struct LockScreenOverlayRootView: View {
         case .locked:
             withAnimation(.easeOut(duration: 0.12)) {
                 isUnlocking = false
+                showLockScreenPlayer = true
                 showOpenedLock = false
                 displayedState = .locked
             }
 
         case .music:
             guard displayedState == .locked else {
+                showLockScreenPlayer = false
+
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.86)) {
                     displayedState = .music
                 }
@@ -112,6 +149,8 @@ struct LockScreenOverlayRootView: View {
             }
 
             displayedState = .locked
+
+            hideLockScreenPlayerForUnlock()
 
             withAnimation(.easeInOut(duration: 0.12)) {
                 isUnlocking = true
@@ -151,5 +190,14 @@ struct LockScreenOverlayRootView: View {
 
         completeTask?.cancel()
         completeTask = nil
+    }
+
+    @MainActor
+    private func hideLockScreenPlayerForUnlock() {
+        guard showLockScreenPlayer else { return }
+
+        withAnimation(.easeOut(duration: 0.12)) {
+            showLockScreenPlayer = false
+        }
     }
 }

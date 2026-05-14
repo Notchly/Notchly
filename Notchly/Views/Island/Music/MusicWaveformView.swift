@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import AppKit
 
 struct MusicWaveformView: View {
     let isPlaying: Bool
@@ -15,9 +14,15 @@ struct MusicWaveformView: View {
 
     var body: some View {
         ZStack {
-            AnimatedWaveformView(
-                isPlaying: isPlaying,
-                color: NSColor(color)
+            EqualizerGlyph(
+                isActive: isPlaying,
+                color: color,
+                idleHeights: [4, 5, 4, 6, 4, 5],
+                activeHeights: [8, 14, 10, 16, 11, 9],
+                phaseOffsets: [0.0, 1.1, 2.2, 0.6, 1.7, 2.8],
+                barWidth: 2,
+                spacing: 3,
+                speed: 4.8
             )
             .frame(height: 18)
             .opacity(skipIndicator == nil ? 1 : 0.18)

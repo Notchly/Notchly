@@ -14,7 +14,7 @@ final class AppEnvironment {
     let lockScreenOverlayModel = LockScreenOverlayModel()
 
     let updaterController = SPUStandardUpdaterController(
-        startingUpdater: true,
+        startingUpdater: false,
         updaterDelegate: nil,
         userDriverDelegate: nil
     )

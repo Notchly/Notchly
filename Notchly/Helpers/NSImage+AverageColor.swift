@@ -7,34 +7,52 @@
 
 import AppKit
 import SwiftUI
-import CoreImage
 
 extension NSImage {
+    func resizedForArtwork(maxPixelSize: CGFloat = 256) -> NSImage {
+        guard let cgImage = cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            return self
+        }
+
+        let sourceSize = CGSize(width: cgImage.width, height: cgImage.height)
+        let longestSide = max(sourceSize.width, sourceSize.height)
+        guard longestSide > maxPixelSize else { return self }
+
+        let scale = maxPixelSize / longestSide
+        let targetSize = CGSize(
+            width: max(1, floor(sourceSize.width * scale)),
+            height: max(1, floor(sourceSize.height * scale))
+        )
+
+        let image = NSImage(size: targetSize)
+        image.lockFocus()
+        NSGraphicsContext.current?.imageInterpolation = .high
+        draw(in: CGRect(origin: .zero, size: targetSize))
+        image.unlockFocus()
+        return image
+    }
+
     var averageColor: NSColor? {
-        guard let tiffData = tiffRepresentation,
-              let ciImage = CIImage(data: tiffData) else {
+        guard let cgImage = cgImage(forProposedRect: nil, context: nil, hints: nil) else {
             return nil
         }
 
-        let extent = ciImage.extent
-        guard let filter = CIFilter(name: "CIAreaAverage") else { return nil }
-
-        filter.setValue(ciImage, forKey: kCIInputImageKey)
-        filter.setValue(CIVector(cgRect: extent), forKey: kCIInputExtentKey)
-
-        guard let outputImage = filter.outputImage else { return nil }
-
         var bitmap = [UInt8](repeating: 0, count: 4)
-        let context = CIContext(options: [.workingColorSpace: NSNull()])
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        guard let context = CGContext(
+            data: &bitmap,
+            width: 1,
+            height: 1,
+            bitsPerComponent: 8,
+            bytesPerRow: 4,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            return nil
+        }
 
-        context.render(
-            outputImage,
-            toBitmap: &bitmap,
-            rowBytes: 4,
-            bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
-            format: .RGBA8,
-            colorSpace: nil
-        )
+        context.interpolationQuality = .low
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: 1, height: 1))
 
         return NSColor(
             red: CGFloat(bitmap[0]) / 255.0,

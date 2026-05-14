@@ -222,10 +222,11 @@ final class MusicManager: ObservableObject {
             return
         }
 
-        artworkImage = artwork
+        let preparedArtwork = artwork.resizedForArtwork()
+        artworkImage = preparedArtwork
         artworkAvailable = true
 
-        if let avgColor = artwork.averageColor?.boostedForWaveform {
+        if let avgColor = preparedArtwork.averageColor?.boostedForWaveform {
             waveformColor = Color(nsColor: avgColor)
         } else {
             waveformColor = .white

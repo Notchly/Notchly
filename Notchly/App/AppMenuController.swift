@@ -11,6 +11,7 @@ import Sparkle
 @MainActor
 final class AppMenuController: NSObject {
     private var statusItem: NSStatusItem?
+    private var hasStartedUpdater = false
 
     private let settingsWindow: SettingsWindow
     private let updaterController: SPUStandardUpdaterController
@@ -84,6 +85,12 @@ final class AppMenuController: NSObject {
     @objc private func checkForUpdates() {
         NSApp.setActivationPolicy(.accessory)
         NSApp.activate(ignoringOtherApps: true)
+
+        if !hasStartedUpdater {
+            updaterController.startUpdater()
+            hasStartedUpdater = true
+        }
+
         updaterController.checkForUpdates(nil)
     }
 

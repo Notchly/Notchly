@@ -13,6 +13,7 @@ struct ContentView: View {
     @ObservedObject var settingsManager: SettingsManager
     @ObservedObject var dynamicManager: DynamicManager
     @ObservedObject var musicManager: MusicManager
+    let animationsEnabled: Bool
 
     @State var status: IslandStatus = .closed
     @State var showChargingPop = false

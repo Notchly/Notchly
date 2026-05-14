@@ -9,7 +9,9 @@ import SwiftUI
 
 extension ContentView {
     var musicContainer: some View {
-        IslandContainerView(
+        let isWaveformActive = animationsEnabled && musicManager.isPlaying
+
+        return IslandContainerView(
             size: layout.islandSize,
             cornerRadius: layout.cornerRadius,
             spacing: layout.spacing,
@@ -19,7 +21,7 @@ extension ContentView {
                 CompactMusicView(
                     artwork: musicManager.artworkImage,
                     waveformColor: musicManager.waveformColor,
-                    isPlaying: musicManager.isPlaying,
+                    isPlaying: isWaveformActive,
                     size: layout.closedSize,
                     hoverOffsetY: hoverOffsetY,
                     skipIndicator: skipIndicator
@@ -34,7 +36,7 @@ extension ContentView {
                     artwork: musicManager.artworkImage,
                     combinedPreviewText: combinedPreviewText,
                     waveformColor: musicManager.waveformColor,
-                    isPlaying: musicManager.isPlaying,
+                    isPlaying: isWaveformActive,
                     size: layout.musicPreviewSize,
                     skipIndicator: skipIndicator
                 )
