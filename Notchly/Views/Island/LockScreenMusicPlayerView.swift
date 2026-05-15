@@ -13,6 +13,12 @@ struct LockScreenMusicPlayerView: View {
     let isVisible: Bool
 
     @State private var playPauseBounce = false
+    @State private var previousButtonBounce = false
+    @State private var nextButtonBounce = false
+    @State private var artworkSlideDirection: CGFloat = 1
+
+    private let artworkSize: CGFloat = 52
+    private let artworkCornerRadius: CGFloat = 6.5
 
     private var isLivestream: Bool {
         musicManager.durationMs <= 0
@@ -29,6 +35,26 @@ struct LockScreenMusicPlayerView: View {
 
     private var displayArtist: String {
         musicManager.artistName.isEmpty ? musicManager.sourceName : musicManager.artistName
+    }
+
+    private var artworkTransitionKey: String {
+        "\(musicManager.trackTitle)|\(musicManager.artistName)|\(musicManager.albumTitle)"
+    }
+
+    private var artworkInsertionEdge: Edge {
+        artworkSlideDirection >= 0 ? .trailing : .leading
+    }
+
+    private var artworkRemovalEdge: Edge {
+        artworkSlideDirection >= 0 ? .leading : .trailing
+    }
+
+    private var artworkTransition: AnyTransition {
+        .asymmetric(
+            insertion: .move(edge: artworkInsertionEdge).combined(with: .opacity),
+            removal: .move(edge: artworkRemovalEdge).combined(with: .opacity)
+        )
+        .combined(with: .scale(scale: 0.98))
     }
 
     var body: some View {
@@ -69,12 +95,14 @@ struct LockScreenMusicPlayerView: View {
 
             HStack(spacing: 44) {
                 Button {
-                    Task { await musicManager.previousTrack() }
+                    previousTrack()
                 } label: {
                     Image(systemName: "backward.fill")
                         .font(.system(size: 27, weight: .bold))
                         .frame(width: 40, height: 40)
                         .foregroundStyle(.white)
+                        .scaleEffect(previousButtonBounce ? 1.08 : 1.0)
+                        .animation(.interactiveSpring(duration: 0.2, extraBounce: 0.18), value: previousButtonBounce)
                 }
                 .buttonStyle(IslandControlButtonStyle())
                 .disabled(isLivestream)
@@ -92,12 +120,14 @@ struct LockScreenMusicPlayerView: View {
                 .buttonStyle(IslandControlButtonStyle(pressedScale: 0.9))
 
                 Button {
-                    Task { await musicManager.nextTrack() }
+                    nextTrack()
                 } label: {
                     Image(systemName: "forward.fill")
                         .font(.system(size: 27, weight: .bold))
                         .frame(width: 40, height: 40)
                         .foregroundStyle(.white)
+                        .scaleEffect(nextButtonBounce ? 1.08 : 1.0)
+                        .animation(.interactiveSpring(duration: 0.2, extraBounce: 0.18), value: nextButtonBounce)
                 }
                 .buttonStyle(IslandControlButtonStyle())
                 .disabled(isLivestream)
@@ -109,27 +139,67 @@ struct LockScreenMusicPlayerView: View {
         .padding(.bottom, 12)
         .frame(width: 405, height: 168)
         .background {
-            RoundedRectangle(cornerRadius: 23, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 23, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    musicManager.waveformColor.opacity(0.44),
-                                    Color(red: 0.12, green: 0.32, blue: 0.68).opacity(0.48)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                }
-                .overlay {
-                    RoundedRectangle(cornerRadius: 23, style: .continuous)
-                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
-                }
+            playerBackground
         }
-        .shadow(color: .black.opacity(0.2), radius: 22, y: 13)
+        .shadow(color: .black.opacity(0.16), radius: 24, y: 13)
+    }
+
+    private var playerBackground: some View {
+        let shape = RoundedRectangle(cornerRadius: 23, style: .continuous)
+
+        return shape
+            .fill(.ultraThinMaterial)
+            .background {
+                shape
+                    .fill(Color.black.opacity(0.04))
+            }
+            .overlay {
+                shape
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.13),
+                                musicManager.waveformColor.opacity(0.06),
+                                Color(red: 0.16, green: 0.28, blue: 0.52).opacity(0.03),
+                                Color.clear
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            }
+            .overlay(alignment: .topLeading) {
+                shape
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.42),
+                                Color.white.opacity(0.14),
+                                Color.white.opacity(0.05)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1
+                    )
+            }
+            .overlay(alignment: .topLeading) {
+                Ellipse()
+                    .fill(Color.white.opacity(0.14))
+                    .frame(width: 190, height: 62)
+                    .blur(radius: 24)
+                    .offset(x: -36, y: -31)
+                    .allowsHitTesting(false)
+            }
+            .overlay(alignment: .bottomTrailing) {
+                Ellipse()
+                    .fill(musicManager.waveformColor.opacity(0.05))
+                    .frame(width: 190, height: 72)
+                    .blur(radius: 32)
+                    .offset(x: 46, y: 34)
+                    .allowsHitTesting(false)
+            }
+            .clipShape(shape)
     }
 
     private var artworkView: some View {
@@ -138,22 +208,27 @@ struct LockScreenMusicPlayerView: View {
                 Image(nsImage: artwork)
                     .resizable()
                     .scaledToFill()
-                    .frame(width: 58, height: 58)
-                    .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                    .frame(width: artworkSize, height: artworkSize)
+                    .clipShape(RoundedRectangle(cornerRadius: artworkCornerRadius, style: .continuous))
                     .shadow(color: .black.opacity(0.2), radius: 7, y: 3)
-                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                    .id(artworkTransitionKey)
+                    .transition(artworkTransition)
             } else {
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                RoundedRectangle(cornerRadius: artworkCornerRadius, style: .continuous)
                     .fill(Color.white.opacity(0.08))
-                    .frame(width: 58, height: 58)
+                    .frame(width: artworkSize, height: artworkSize)
                     .overlay {
                         Image(systemName: "music.note")
-                            .font(.system(size: 19, weight: .semibold))
+                            .font(.system(size: 18, weight: .semibold))
                             .foregroundStyle(.white.opacity(0.78))
                     }
+                    .id("placeholder")
+                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
             }
         }
-        .animation(.easeInOut(duration: 0.25), value: musicManager.artworkImage)
+        .frame(width: artworkSize, height: artworkSize)
+        .clipShape(RoundedRectangle(cornerRadius: artworkCornerRadius, style: .continuous))
+        .animation(.easeInOut(duration: 0.28), value: artworkTransitionKey)
     }
 
     @ViewBuilder
@@ -181,6 +256,7 @@ struct LockScreenMusicPlayerView: View {
 
                 LockScreenSeekBar(
                     progress: progress,
+                    tintColor: musicManager.waveformColor,
                     onPreviewSeek: { musicManager.previewSeek(toProgress: $0) },
                     onSeek: { musicManager.seek(toProgress: $0) }
                 )
@@ -208,6 +284,38 @@ struct LockScreenMusicPlayerView: View {
         }
     }
 
+    private func previousTrack() {
+        animateSkip(direction: -1)
+        Task { await musicManager.previousTrack() }
+    }
+
+    private func nextTrack() {
+        animateSkip(direction: 1)
+        Task { await musicManager.nextTrack() }
+    }
+
+    private func animateSkip(direction: CGFloat) {
+        artworkSlideDirection = direction
+
+        withAnimation(.interactiveSpring(duration: 0.2, extraBounce: 0.18)) {
+            if direction < 0 {
+                previousButtonBounce = true
+            } else {
+                nextButtonBounce = true
+            }
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+            withAnimation(.interactiveSpring(duration: 0.2, extraBounce: 0.08)) {
+                if direction < 0 {
+                    previousButtonBounce = false
+                } else {
+                    nextButtonBounce = false
+                }
+            }
+        }
+    }
+
     private func formatPlaybackTime(_ totalSeconds: TimeInterval) -> String {
         let seconds = max(0, Int(totalSeconds.rounded()))
         let hours = seconds / 3600
@@ -229,36 +337,167 @@ struct LockScreenMusicPlayerView: View {
 
 private struct LockScreenSeekBar: View {
     let progress: CGFloat
+    let tintColor: Color
     let onPreviewSeek: (CGFloat) -> Void
     let onSeek: (CGFloat) -> Void
 
+    @State private var isHovering = false
+    @State private var isSeeking = false
+    @State private var previewProgress: CGFloat?
+
+    private var displayProgress: CGFloat {
+        previewProgress ?? progress
+    }
+
     var body: some View {
         GeometryReader { geo in
+            let width = max(geo.size.width, 1)
+            let fillWidth = max(7, width * displayProgress)
+            let thumbVisible = isHovering || isSeeking
+
             ZStack(alignment: .leading) {
                 Capsule()
-                    .fill(Color.white.opacity(0.24))
+                    .fill(Color.white.opacity(0.22))
                     .frame(height: 6)
 
                 Capsule()
-                    .fill(Color.white.opacity(0.94))
-                    .frame(width: max(7, geo.size.width * progress), height: 6)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.98),
+                                tintColor.opacity(0.92)
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(width: fillWidth, height: isSeeking ? 7 : 6)
+
+                Circle()
+                    .fill(Color.white)
+                    .frame(width: isSeeking ? 13 : 10, height: isSeeking ? 13 : 10)
+                    .shadow(color: tintColor.opacity(0.35), radius: 5)
+                    .offset(x: min(max(fillWidth - 6, 0), width - 10))
+                    .opacity(thumbVisible ? 1 : 0)
+                    .scaleEffect(thumbVisible ? 1 : 0.72)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { value in
-                        onPreviewSeek(normalizedProgress(value.location.x, width: geo.size.width))
+            .animation(.interactiveSpring(duration: 0.18, extraBounce: 0.06), value: isHovering)
+            .animation(.interactiveSpring(duration: 0.18, extraBounce: 0.08), value: isSeeking)
+            .animation(.easeInOut(duration: 0.12), value: displayProgress)
+            .overlay {
+                LockScreenSeekInteractionView(
+                    onHoverChange: { hovering in
+                        isHovering = hovering
+                    },
+                    onPreviewSeek: { nextProgress in
+                        isSeeking = true
+                        previewProgress = nextProgress
+                        onPreviewSeek(nextProgress)
+                    },
+                    onSeek: { nextProgress in
+                        onSeek(nextProgress)
+
+                        withAnimation(.easeOut(duration: 0.12)) {
+                            previewProgress = nil
+                            isSeeking = false
+                        }
                     }
-                    .onEnded { value in
-                        onSeek(normalizedProgress(value.location.x, width: geo.size.width))
-                    }
-            )
+                )
+            }
         }
     }
 
     private func normalizedProgress(_ xPosition: CGFloat, width: CGFloat) -> CGFloat {
         guard width > 0 else { return progress }
         return min(max(xPosition / width, 0), 1)
+    }
+}
+
+private struct LockScreenSeekInteractionView: NSViewRepresentable {
+    let onHoverChange: (Bool) -> Void
+    let onPreviewSeek: (CGFloat) -> Void
+    let onSeek: (CGFloat) -> Void
+
+    func makeNSView(context: Context) -> LockScreenSeekInteractionNSView {
+        let view = LockScreenSeekInteractionNSView()
+        view.onHoverChange = onHoverChange
+        view.onPreviewSeek = onPreviewSeek
+        view.onSeek = onSeek
+        return view
+    }
+
+    func updateNSView(_ nsView: LockScreenSeekInteractionNSView, context: Context) {
+        nsView.onHoverChange = onHoverChange
+        nsView.onPreviewSeek = onPreviewSeek
+        nsView.onSeek = onSeek
+    }
+}
+
+private final class LockScreenSeekInteractionNSView: NSView {
+    var onHoverChange: ((Bool) -> Void)?
+    var onPreviewSeek: ((CGFloat) -> Void)?
+    var onSeek: ((CGFloat) -> Void)?
+
+    private var trackingAreaRef: NSTrackingArea?
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = false
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        wantsLayer = false
+    }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+
+        if let trackingAreaRef {
+            removeTrackingArea(trackingAreaRef)
+        }
+
+        let trackingArea = NSTrackingArea(
+            rect: .zero,
+            options: [.activeAlways, .inVisibleRect, .mouseEnteredAndExited],
+            owner: self
+        )
+
+        addTrackingArea(trackingArea)
+        trackingAreaRef = trackingArea
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        onHoverChange?(true)
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        onHoverChange?(false)
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        onHoverChange?(true)
+        onPreviewSeek?(progress(for: event))
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        onPreviewSeek?(progress(for: event))
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        onSeek?(progress(for: event))
+    }
+
+    private func progress(for event: NSEvent) -> CGFloat {
+        guard bounds.width > 0 else { return 0 }
+
+        let point = convert(event.locationInWindow, from: nil)
+        return min(max(point.x / bounds.width, 0), 1)
     }
 }

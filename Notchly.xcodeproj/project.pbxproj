@@ -320,7 +320,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -353,7 +353,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				MARKETING_VERSION = 1.0.4;
+				MARKETING_VERSION = 1.0.5;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-framework",
@@ -391,7 +391,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -424,7 +424,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				MARKETING_VERSION = 1.0.4;
+				MARKETING_VERSION = 1.0.5;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-framework",
