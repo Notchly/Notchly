@@ -243,15 +243,17 @@ struct SettingsView: View {
     }
 
     private func resetSelectedSection() {
-        switch selectedSection {
-        case .about:
-            break
-        case .general:
-            break
-        case .battery:
-            break
-        case .music:
-            break
+        withAnimation(.easeInOut(duration: 0.18)) {
+            switch selectedSection {
+            case .about:
+                break
+            case .general:
+                settingsManager.resetGeneralSettings()
+            case .battery:
+                settingsManager.resetBatterySettings()
+            case .music:
+                settingsManager.resetMusicSettings()
+            }
         }
     }
 }
