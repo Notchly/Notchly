@@ -1,48 +1,127 @@
-# Notchly
+<p align="center">
+  <img src="Notchly/Resources/Assets.xcassets/AppIcon.appiconset/logo_256x256.png" width="96" height="96" alt="Notchly app icon">
+</p>
 
-Notchly is a native macOS menu bar app that brings a compact Dynamic Island-style overlay to the notch area. It shows battery state, Now Playing controls, artwork-aware waveform color, and a small lock-screen transition without taking over the desktop.
+<h1 align="center">Notchly</h1>
 
-## Highlights
+<p align="center">
+  Turn your MacBook notch into a useful, interactive space.
+</p>
 
-- Dynamic Island-style overlay positioned around the macOS notch/safe area
-- Compact and expanded battery states with charging and low-battery feedback
-- Now Playing controls with play/pause, previous/next, seeking, artwork, source app opening, and animated waveform
-- Track preview state when music starts, changes, or is skipped
-- Lock-screen overlay with optional unlock sound
-- Menu bar controls for settings, update checks, and quit
-- Settings window for general behavior, battery, music, and about information
-- Sparkle update configuration kept in `Config/Info.plist`
+<p align="center">
+  <a href="https://notchly.xyz"><strong>Website</strong></a>
+  ·
+  <a href="https://github.com/Notchly/Notchly/releases/latest"><strong>Download for macOS</strong></a>
+  ·
+  <a href="https://cdn.notchly.xyz/notchly-preview.mp4"><strong>Video preview</strong></a>
+  ·
+  <a href="docs/ARCHITECTURE.md"><strong>Architecture</strong></a>
+</p>
 
-## Requirements
+<p align="center">
+  <img src="https://img.shields.io/badge/macOS-15.6%2B-black?style=flat-square&logo=apple" alt="macOS 15.6+">
+  <img src="https://img.shields.io/badge/SwiftUI-Native-orange?style=flat-square&logo=swift" alt="Native SwiftUI app">
+  <img src="https://img.shields.io/badge/Privacy-Friendly-green?style=flat-square" alt="Privacy friendly">
+  <a href="https://github.com/Notchly/Notchly/releases/latest">
+    <img alt="Latest release" src="https://img.shields.io/github/v/release/Notchly/Notchly?style=flat-square&label=release">
+  </a>
+  <a href="https://github.com/Notchly/Notchly/blob/main/LICENSE">
+    <img alt="License" src="https://img.shields.io/github/license/Notchly/Notchly?style=flat-square">
+  </a>
+  <a href="https://github.com/Notchly/Notchly/stargazers">
+    <img alt="GitHub stars" src="https://img.shields.io/github/stars/Notchly/Notchly?style=flat-square">
+  </a>
+  <a href="https://github.com/Notchly/Notchly/releases">
+    <img alt="Downloads" src="https://img.shields.io/github/downloads/Notchly/Notchly/total?style=flat-square">
+  </a>
+</p>
+
+---
+
+## Notchly
+
+**Notchly** is a lightweight native macOS app that gives the MacBook notch something useful to do.
+
+It adds compact HUDs, live music controls, lock screen support, focus animations, swipe gestures, smooth transitions, and small native interactions around the notch, making it feel like an intentional part of macOS instead of unused screen space.
+
+Notchly is built to stay simple, fast, and focused.
+
+## Preview
+
+<p align="center">
+  <video
+    src="https://cdn.notchly.xyz/notchly-preview.mp4"
+    width="800"
+    controls
+    loop
+    playsinline
+  >
+    <a href="https://cdn.notchly.xyz/notchly-preview.mp4">Watch the video preview</a>
+  </video>
+</p>
+
+<p align="center">
+  <a href="https://cdn.notchly.xyz/notchly-preview.mp4">Watch the video preview</a>
+</p>
+
+## Features
+
+| Feature | What it adds |
+| --- | --- |
+| Dynamic Island overlay | A compact, native HUD designed for the notch and safe area. |
+| Music controls | Play/pause, previous/next, seek, shuffle, volume, artwork, and app handoff. |
+| Lock screen player | A centered music player with liquid-glass styling and artwork transitions. |
+| Battery states | Charging, low-battery, and compact battery status views. |
+| Focus animations | Short on/off animations that work alongside active music playback. |
+| Swipe gestures | Quick controls for switching and interacting with island states. |
+| Multi-display support | Choose primary-display behavior or let Notchly follow the active screen. |
+| Native settings | Focused preferences for general behavior, battery, music, and updates. |
+
+## Quickstart
+
+### Download
+
+1. Open the [latest release](https://github.com/Notchly/Notchly/releases/latest).
+2. Download the `Notchly-*.dmg` asset.
+3. Open the DMG and move Notchly to Applications.
+4. Launch Notchly from Applications.
+
+Depending on your macOS security settings, you may need to confirm the first launch in System Settings. macOS may also ask for Automation permission the first time you use Spotify or Apple Music controls that rely on Apple Events.
+
+### Settings
+
+Open Notchly from the menu bar to configure:
+
+- General behavior, launch at login, lock sound, and focus animations
+- Battery visibility and low-battery threshold
+- Music preview timing and AppleScript controls for Spotify or Apple Music
+- Primary-display behavior for multi-monitor setups
+
+## Build From Source
+
+### Requirements
 
 - macOS 15.6 or newer
 - Xcode 26 or newer
-- A Mac display setup where notch/safe-area behavior is available
+- A Mac display setup where notch or safe-area behavior is available
 
-## Dependencies
+### Xcode
 
-Notchly uses Swift Package Manager through the Xcode project:
+1. Clone the repository.
+2. Open `Notchly.xcodeproj`.
+3. Let Xcode resolve Swift Package Manager dependencies.
+4. Select the `Notchly` scheme.
+5. Build and run.
 
-- [Sparkle](https://sparkle-project.org/) for app update checks
-- [SkyLightWindow](https://github.com/Lakr233/SkyLightWindow) for the overlay window integration
-- [mediaremote-adapter](https://github.com/ejbills/mediaremote-adapter) for Now Playing / MediaRemote access
-
-The app also links against Apple's private `MediaRemote` framework. That makes the music experience possible, but it has distribution implications: private APIs can affect App Store eligibility, notarization expectations, and long-term compatibility.
-
-## Build
-
-1. Open `Notchly.xcodeproj` in Xcode.
-2. Let Xcode resolve Swift Package Manager dependencies.
-3. Select the `Notchly` scheme.
-4. Build and run.
-
-Command-line build:
+### Command Line
 
 ```sh
+git clone git@github.com:Notchly/Notchly.git
+cd Notchly
 xcodebuild -project Notchly.xcodeproj -scheme Notchly -configuration Debug build
 ```
 
-For a sandbox-friendly local build with a custom derived data folder:
+For a build with a custom DerivedData directory:
 
 ```sh
 xcodebuild \
@@ -53,48 +132,34 @@ xcodebuild \
   build
 ```
 
-## Update Configuration
+## Dependencies
 
-Sparkle reads its appcast and signing configuration from `Config/Info.plist`.
+Notchly uses Swift Package Manager through the Xcode project:
 
-Important keys:
-
-- `SUFeedURL`: appcast URL
-- `SUPublicEDKey`: Sparkle EdDSA public key
-- `SUEnableAutomaticChecks`: automatic update checks
-- `SUAutomaticallyUpdate`: automatic update installation behavior
-- `SUScheduledCheckInterval`: update check interval
-
-The Xcode target points at this file with:
-
-```text
-INFOPLIST_FILE = Config/Info.plist
-```
-
-So `Notchly/Info.plist` is intentionally not used anymore.
+- [Sparkle](https://sparkle-project.org/) for app update checks
+- [SkyLightWindow](https://github.com/Lakr233/SkyLightWindow) for overlay window integration
+- [mediaremote-adapter](https://github.com/ejbills/mediaremote-adapter) for Now Playing / MediaRemote access
 
 ## Project Structure
 
-- `Config`: app configuration files, including the Sparkle-backed `Info.plist`
-- `Notchly/App`: app lifecycle, dependency container, menu bar, overlay, Sparkle, and lock-screen coordinators
+- `Config`: app configuration files, including Sparkle-backed `Info.plist`
+- `Notchly/App`: app lifecycle, dependency container, menu bar, overlay, focus, and lock-screen coordinators
 - `Notchly/Managers`: observable runtime state for settings, music, battery, and island module selection
 - `Notchly/Models`: small domain models shared across managers and views
 - `Notchly/Views`: SwiftUI views grouped by island, settings, and shared UI
-- `Notchly/Windows`: AppKit wrappers for standalone app windows
+- `Notchly/Windows`: AppKit wrappers for standalone windows
 - `Notchly/Helpers`: platform helpers and SwiftUI/AppKit bridges
-- `Notchly/Resources`: assets, sounds, and bundled adapter framework resources
+- `Notchly/Resources`: assets, sounds, and bundled adapter resources
 - `docs`: architecture notes and project documentation
 
-See `docs/ARCHITECTURE.md` for the runtime flow and ownership map.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the runtime flow and ownership map.
 
-## Development Notes
+## Contributing
 
-- Keep app lifecycle and platform coordination in `Notchly/App`.
-- Keep system API state behind managers in `Notchly/Managers`.
-- Keep feature views presentational where possible.
-- Keep `Package.resolved` tracked so builds use the same dependency revisions.
-- Avoid committing local signing changes, DerivedData, archives, or Xcode user state.
+Pull requests are welcome. Please keep platform integrations isolated, avoid committing local signing changes, and make sure the app builds before opening a PR.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for local setup and the PR checklist.
 
 ## License
 
-Notchly is released under the MIT License. See `LICENSE` for details.
+Notchly is released under the MIT License. See [LICENSE](LICENSE) for details.
