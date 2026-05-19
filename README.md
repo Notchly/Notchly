@@ -49,19 +49,9 @@ Notchly is built to stay simple, fast, and focused.
 ## Preview
 
 <p align="center">
-  <video
-    src="https://cdn.notchly.xyz/notchly-preview.mp4"
-    width="800"
-    controls
-    loop
-    playsinline
-  >
-    <a href="https://cdn.notchly.xyz/notchly-preview.mp4">Watch the video preview</a>
-  </video>
-</p>
 
-<p align="center">
-  <a href="https://cdn.notchly.xyz/notchly-preview.mp4">Watch the video preview</a>
+https://github.com/user-attachments/assets/01e1a07d-79c5-444c-abfd-1ae2ec9b4e48
+
 </p>
 
 ## Features
