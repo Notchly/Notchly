@@ -13,6 +13,7 @@ extension ContentView {
         status = .closed
         showChargingPop = false
         isHovered = false
+        hideFocusStatusPreview(animated: false)
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
             hasFinishedInitialAppear = true
@@ -81,6 +82,161 @@ extension ContentView {
             withAnimation(.easeOut(duration: 0.18)) {
                 skipIndicator = nil
             }
+        }
+    }
+
+    func handleFocusEvent(isActive: Bool) {
+        guard settingsManager.showFocusAnimations else { return }
+        guard canShowFocusStatusAnimation else {
+            queuePendingFocusEvent(isActive: isActive)
+            return
+        }
+
+        pendingFocusEventTimestamp = nil
+        startFocusStatusAnimation(isActive: isActive)
+    }
+
+    var canShowFocusStatusAnimation: Bool {
+        animationsEnabled
+            && dynamicManager.currentModule == .music
+            && settingsManager.showMusic
+            && musicManager.hasNowPlayingContent
+    }
+
+    func queuePendingFocusEvent(isActive: Bool) {
+        pendingFocusEventIsActive = isActive
+        pendingFocusEventTimestamp = Date.timeIntervalSinceReferenceDate
+    }
+
+    func playPendingFocusEventIfReady() {
+        guard let timestamp = pendingFocusEventTimestamp else { return }
+
+        guard settingsManager.showFocusAnimations else {
+            pendingFocusEventTimestamp = nil
+            return
+        }
+
+        guard Date.timeIntervalSinceReferenceDate - timestamp < 2.5 else {
+            pendingFocusEventTimestamp = nil
+            return
+        }
+
+        guard canShowFocusStatusAnimation else { return }
+
+        let isActive = pendingFocusEventIsActive
+        pendingFocusEventTimestamp = nil
+        startFocusStatusAnimation(isActive: isActive)
+    }
+
+    private func startFocusStatusAnimation(isActive: Bool) {
+
+        let collapseDuration = 0.34
+
+        focusStatusTask?.cancel()
+        autoExpandMusicTask?.cancel()
+        showMusicVolumeControl = false
+        focusStatusIsActive = isActive
+        focusAnimationID += 1
+
+        if status == .focusPreview {
+            scheduleFocusReturn(
+                returnStatus: focusReturnStatus,
+                collapseDuration: collapseDuration
+            )
+            return
+        }
+
+        if status != .focusPreview && status != .focusCollapse {
+            focusReturnStatus = status
+        }
+
+        focusCollapseShowsMusic = status != .focusCollapse || focusCollapseShowsMusic
+
+        withAnimation(.smooth(duration: collapseDuration, extraBounce: 0)) {
+            status = .focusCollapse
+        }
+
+        let returnStatus = focusReturnStatus
+
+        focusStatusTask = Task {
+            try? await Task.sleep(for: .seconds(collapseDuration))
+            guard !Task.isCancelled else { return }
+
+            await MainActor.run {
+                guard status == .focusCollapse else { return }
+
+                focusCollapseShowsMusic = false
+
+                withAnimation(.smooth(duration: 0.42, extraBounce: 0)) {
+                    status = .focusPreview
+                }
+            }
+
+            await MainActor.run {
+                scheduleFocusReturn(
+                    returnStatus: returnStatus,
+                    collapseDuration: collapseDuration
+                )
+            }
+        }
+    }
+
+    func scheduleFocusReturn(
+        returnStatus: IslandStatus,
+        collapseDuration: Double
+    ) {
+        focusStatusTask?.cancel()
+
+        focusStatusTask = Task {
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled else { return }
+
+            await MainActor.run {
+                guard status == .focusPreview else { return }
+
+                focusCollapseShowsMusic = false
+
+                withAnimation(.smooth(duration: collapseDuration, extraBounce: 0)) {
+                    status = .focusCollapse
+                }
+            }
+
+            try? await Task.sleep(for: .seconds(collapseDuration))
+            guard !Task.isCancelled else { return }
+
+            await MainActor.run {
+                guard status == .focusCollapse else { return }
+
+                focusCollapseShowsMusic = true
+                focusStatusTask = nil
+
+                withAnimation(.smooth(duration: 0.42, extraBounce: 0)) {
+                    status = returnStatus
+                }
+
+                if (returnStatus == .opened || returnStatus == .musicPreview) && !isPointerInsideIsland {
+                    scheduleAutoClose(after: 2.0)
+                }
+            }
+        }
+    }
+
+    func hideFocusStatusPreview(animated: Bool = true) {
+        focusStatusTask?.cancel()
+        focusStatusTask = nil
+        pendingFocusEventTimestamp = nil
+
+        guard status == .focusPreview || status == .focusCollapse else { return }
+
+        let updates = {
+            focusCollapseShowsMusic = true
+            status = focusReturnStatus
+        }
+
+        if animated {
+            withAnimation(animation, updates)
+        } else {
+            updates()
         }
     }
 }

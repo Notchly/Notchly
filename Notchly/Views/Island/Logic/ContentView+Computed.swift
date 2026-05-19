@@ -48,6 +48,10 @@ extension ContentView {
             return 1.012
         case .musicPreview:
             return 1.01
+        case .focusCollapse:
+            return 1.0
+        case .focusPreview:
+            return 1.01
         }
     }
 

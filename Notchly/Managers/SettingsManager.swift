@@ -21,6 +21,7 @@ final class SettingsManager: ObservableObject {
         static let enableAppleMusicAppleScriptControl = false
         static let launchAtLogin = false
         static let enableLockSound = true
+        static let showFocusAnimations = true
     }
 
     @Published var showBattery: Bool {
@@ -62,6 +63,10 @@ final class SettingsManager: ObservableObject {
         didSet { UserDefaults.standard.set(enableLockSound, forKey: "enableLockSound") }
     }
 
+    @Published var showFocusAnimations: Bool {
+        didSet { UserDefaults.standard.set(showFocusAnimations, forKey: "showFocusAnimations") }
+    }
+
     init() {
         self.showBattery = UserDefaults.standard.object(forKey: "showBattery") as? Bool ?? Defaults.showBattery
         self.showMusic = UserDefaults.standard.object(forKey: "showMusic") as? Bool ?? Defaults.showMusic
@@ -75,6 +80,7 @@ final class SettingsManager: ObservableObject {
         let systemLaunchAtLogin = SMAppService.mainApp.status == .enabled
         self.launchAtLogin = savedLaunchAtLogin ?? systemLaunchAtLogin
         self.enableLockSound = UserDefaults.standard.object(forKey: "enableLockSound") as? Bool ?? Defaults.enableLockSound
+        self.showFocusAnimations = UserDefaults.standard.object(forKey: "showFocusAnimations") as? Bool ?? Defaults.showFocusAnimations
     }
 
     func refreshLaunchAtLoginStatus() {
@@ -85,6 +91,7 @@ final class SettingsManager: ObservableObject {
         showOnPrimaryDisplayOnly = Defaults.showOnPrimaryDisplayOnly
         launchAtLogin = Defaults.launchAtLogin
         enableLockSound = Defaults.enableLockSound
+        showFocusAnimations = Defaults.showFocusAnimations
     }
 
     func resetBatterySettings() {
