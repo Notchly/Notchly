@@ -6,6 +6,7 @@
 //
 
 import AppKit
+import Combine
 import SwiftUI
 import SkyLightWindow
 
@@ -16,6 +17,7 @@ final class SkyLightOverlayController {
     private var screenChangeObserver: NSObjectProtocol?
     private var screenRefreshTask: Task<Void, Never>?
     private var currentScreenID: CGDirectDisplayID?
+    private var settingsCancellable: AnyCancellable?
 
     init(environment: AppEnvironment) {
         self.environment = environment
@@ -23,12 +25,15 @@ final class SkyLightOverlayController {
 
     func show() {
         installScreenObserver()
+        installSettingsObserver()
         updateOverlayScreen(force: true)
     }
 
     func stop() {
         screenRefreshTask?.cancel()
         screenRefreshTask = nil
+        settingsCancellable?.cancel()
+        settingsCancellable = nil
 
         if let screenChangeObserver {
             NotificationCenter.default.removeObserver(screenChangeObserver)
@@ -52,6 +57,19 @@ final class SkyLightOverlayController {
                 self?.scheduleOverlayScreenRefresh()
             }
         }
+    }
+
+    private func installSettingsObserver() {
+        guard settingsCancellable == nil else { return }
+
+        settingsCancellable = environment.settingsManager.$showOnPrimaryDisplayOnly
+            .removeDuplicates()
+            .dropFirst()
+            .sink { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.updateOverlayScreen(force: true)
+                }
+            }
     }
 
     private func scheduleOverlayScreenRefresh() {
@@ -95,13 +113,34 @@ final class SkyLightOverlayController {
     private func targetScreen() -> NSScreen? {
         let screens = NSScreen.screens
 
+        guard !screens.isEmpty else { return nil }
+
+        if environment.settingsManager.showOnPrimaryDisplayOnly {
+            return primaryNotchedScreen(in: screens)
+                ?? NSScreen.main
+                ?? screens.first
+        }
+
+        return screenContainingMouse(in: screens)
+            ?? NSScreen.main
+            ?? primaryNotchedScreen(in: screens)
+            ?? screens.first
+    }
+
+    private func primaryNotchedScreen(in screens: [NSScreen]) -> NSScreen? {
         return screens
             .max { lhs, rhs in
                 lhs.safeAreaInsets.top < rhs.safeAreaInsets.top
             }
             .flatMap { $0.safeAreaInsets.top > 0 ? $0 : nil }
-            ?? NSScreen.main
-            ?? screens.first
+    }
+
+    private func screenContainingMouse(in screens: [NSScreen]) -> NSScreen? {
+        let mouseLocation = NSEvent.mouseLocation
+
+        return screens.first { screen in
+            screen.frame.contains(mouseLocation)
+        }
     }
 
     private func displayID(for screen: NSScreen) -> CGDirectDisplayID? {
