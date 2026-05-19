@@ -36,6 +36,12 @@
   </a>
 </p>
 
+<p align="center">
+  If Notchly makes your Mac feel a little better, please
+  <a href="https://github.com/Notchly/Notchly/stargazers"><strong>⭐ star the project</strong></a>.
+  It helps more Mac users discover it.
+</p>
+
 ---
 
 ## Notchly
@@ -129,20 +135,6 @@ Notchly uses Swift Package Manager through the Xcode project:
 - [Sparkle](https://sparkle-project.org/) for app update checks
 - [SkyLightWindow](https://github.com/Lakr233/SkyLightWindow) for overlay window integration
 - [mediaremote-adapter](https://github.com/ejbills/mediaremote-adapter) for Now Playing / MediaRemote access
-
-## Project Structure
-
-- `Config`: app configuration files, including Sparkle-backed `Info.plist`
-- `Notchly/App`: app lifecycle, dependency container, menu bar, overlay, focus, and lock-screen coordinators
-- `Notchly/Managers`: observable runtime state for settings, music, battery, and island module selection
-- `Notchly/Models`: small domain models shared across managers and views
-- `Notchly/Views`: SwiftUI views grouped by island, settings, and shared UI
-- `Notchly/Windows`: AppKit wrappers for standalone windows
-- `Notchly/Helpers`: platform helpers and SwiftUI/AppKit bridges
-- `Notchly/Resources`: assets, sounds, and bundled adapter resources
-- `docs`: architecture notes and project documentation
-
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the runtime flow and ownership map.
 
 ## Contributing
 
