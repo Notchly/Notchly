@@ -35,6 +35,14 @@ struct GeneralSettingsView: View {
                         subtitle: "Play a subtle sound when the lock screen state changes.",
                         isOn: $settingsManager.enableLockSound
                     )
+
+                    SettingsDivider()
+
+                    SettingsToggleRow(
+                        title: "Focus Animations",
+                        subtitle: "Show a small island animation when Focus turns on or off.",
+                        isOn: $settingsManager.showFocusAnimations
+                    )
                 }
             }
         }

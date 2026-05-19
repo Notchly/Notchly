@@ -101,7 +101,12 @@ struct SettingsView: View {
                         .frame(width: 32, height: 36)
                 }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SubtleHoverButtonStyle(
+                pressedScale: 0.94,
+                hoverScale: 1.05,
+                hoverBackgroundOpacity: 0.08,
+                cornerRadius: 14
+            ))
             .foregroundStyle(.secondary)
             .background(.black.opacity(0.16))
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
@@ -120,12 +125,17 @@ struct SettingsView: View {
                 Button("Reset") {
                     resetSelectedSection()
                 }
-                .buttonStyle(.plain)
                 .font(.system(size: 14, weight: .medium))
                 .padding(.horizontal, 16)
                 .frame(height: 36)
                 .background(.black.opacity(0.18))
                 .clipShape(RoundedRectangle(cornerRadius: 19, style: .continuous))
+                .buttonStyle(SubtleHoverButtonStyle(
+                    pressedScale: 0.96,
+                    hoverScale: 1.025,
+                    hoverBackgroundOpacity: 0.08,
+                    cornerRadius: 19
+                ))
             }
         }
         .padding(.leading, 22)
@@ -194,7 +204,12 @@ struct SettingsView: View {
             }
             .foregroundStyle(selectedSection == section ? .white : .primary)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SubtleHoverButtonStyle(
+            pressedScale: 0.98,
+            hoverScale: 1.01,
+            hoverBackgroundOpacity: selectedSection == section ? 0 : 0.06,
+            cornerRadius: 10
+        ))
     }
 
     @ViewBuilder
@@ -243,15 +258,17 @@ struct SettingsView: View {
     }
 
     private func resetSelectedSection() {
-        switch selectedSection {
-        case .about:
-            break
-        case .general:
-            break
-        case .battery:
-            break
-        case .music:
-            break
+        withAnimation(.easeInOut(duration: 0.18)) {
+            switch selectedSection {
+            case .about:
+                break
+            case .general:
+                settingsManager.resetGeneralSettings()
+            case .battery:
+                settingsManager.resetBatterySettings()
+            case .music:
+                settingsManager.resetMusicSettings()
+            }
         }
     }
 }

@@ -150,6 +150,11 @@ private struct AboutLinkRow: View {
             .padding(.vertical, 11)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SubtleHoverButtonStyle(
+            pressedScale: 0.98,
+            hoverScale: 1.01,
+            hoverBackgroundOpacity: 0.06,
+            cornerRadius: 12
+        ))
     }
 }

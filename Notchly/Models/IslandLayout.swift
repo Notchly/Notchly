@@ -32,6 +32,14 @@ struct IslandLayout {
         CGSize(width: 318, height: 68)
     }
 
+    var focusPreviewSize: CGSize {
+        closedSize
+    }
+
+    var focusCollapsedSize: CGSize {
+        CGSize(width: closedSize.width * 0.5, height: closedHeight)
+    }
+
     var chargingSize: CGSize {
         CGSize(width: 280, height: closedHeight)
     }
@@ -46,6 +54,10 @@ struct IslandLayout {
             return showChargingPop ? chargingSize : closedSize
         case .musicPreview:
             return musicPreviewSize
+        case .focusCollapse:
+            return focusCollapsedSize
+        case .focusPreview:
+            return focusPreviewSize
         }
     }
 
@@ -59,6 +71,10 @@ struct IslandLayout {
             return 10
         case .musicPreview:
             return 24
+        case .focusCollapse:
+            return 8
+        case .focusPreview:
+            return 8
         }
     }
 }

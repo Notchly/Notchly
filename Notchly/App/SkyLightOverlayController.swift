@@ -6,6 +6,7 @@
 //
 
 import AppKit
+import Combine
 import SwiftUI
 import SkyLightWindow
 
@@ -13,19 +14,91 @@ import SkyLightWindow
 final class SkyLightOverlayController {
     private let environment: AppEnvironment
     private var windowController: NSWindowController?
+    private var screenChangeObserver: NSObjectProtocol?
+    private var screenRefreshTask: Task<Void, Never>?
+    private var currentScreenID: CGDirectDisplayID?
+    private var settingsCancellable: AnyCancellable?
 
     init(environment: AppEnvironment) {
         self.environment = environment
     }
 
     func show() {
-        guard windowController == nil else { return }
-        guard let screen = NSScreen.main else { return }
+        installScreenObserver()
+        installSettingsObserver()
+        updateOverlayScreen(force: true)
+    }
+
+    func stop() {
+        screenRefreshTask?.cancel()
+        screenRefreshTask = nil
+        settingsCancellable?.cancel()
+        settingsCancellable = nil
+
+        if let screenChangeObserver {
+            NotificationCenter.default.removeObserver(screenChangeObserver)
+            self.screenChangeObserver = nil
+        }
+
+        windowController?.close()
+        windowController = nil
+        currentScreenID = nil
+    }
+
+    private func installScreenObserver() {
+        guard screenChangeObserver == nil else { return }
+
+        screenChangeObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.scheduleOverlayScreenRefresh()
+            }
+        }
+    }
+
+    private func installSettingsObserver() {
+        guard settingsCancellable == nil else { return }
+
+        settingsCancellable = environment.settingsManager.$showOnPrimaryDisplayOnly
+            .removeDuplicates()
+            .dropFirst()
+            .sink { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.updateOverlayScreen(force: true)
+                }
+            }
+    }
+
+    private func scheduleOverlayScreenRefresh() {
+        screenRefreshTask?.cancel()
+
+        screenRefreshTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(250))
+            guard !Task.isCancelled else { return }
+
+            await MainActor.run {
+                self?.screenRefreshTask = nil
+                self?.updateOverlayScreen()
+            }
+        }
+    }
+
+    private func updateOverlayScreen(force: Bool = false) {
+        guard let screen = targetScreen() else { return }
+
+        let screenID = displayID(for: screen)
+        guard force || windowController == nil || currentScreenID != screenID else { return }
+
+        windowController?.close()
 
         let view = AnyView(
             LockScreenOverlayRootView(
                 model: environment.lockScreenOverlayModel,
                 settingsManager: environment.settingsManager,
+                focusManager: environment.focusManager,
                 batteryManager: environment.batteryManager,
                 dynamicManager: environment.dynamicManager,
                 musicManager: environment.musicManager,
@@ -34,5 +107,47 @@ final class SkyLightOverlayController {
         )
 
         windowController = SkyLightOperator.shared.delegateView(view, toScreen: screen)
+        currentScreenID = screenID
+    }
+
+    private func targetScreen() -> NSScreen? {
+        let screens = NSScreen.screens
+
+        guard !screens.isEmpty else { return nil }
+
+        if environment.settingsManager.showOnPrimaryDisplayOnly {
+            return primaryNotchedScreen(in: screens)
+                ?? NSScreen.main
+                ?? screens.first
+        }
+
+        return screenContainingMouse(in: screens)
+            ?? NSScreen.main
+            ?? primaryNotchedScreen(in: screens)
+            ?? screens.first
+    }
+
+    private func primaryNotchedScreen(in screens: [NSScreen]) -> NSScreen? {
+        return screens
+            .max { lhs, rhs in
+                lhs.safeAreaInsets.top < rhs.safeAreaInsets.top
+            }
+            .flatMap { $0.safeAreaInsets.top > 0 ? $0 : nil }
+    }
+
+    private func screenContainingMouse(in screens: [NSScreen]) -> NSScreen? {
+        let mouseLocation = NSEvent.mouseLocation
+
+        return screens.first { screen in
+            screen.frame.contains(mouseLocation)
+        }
+    }
+
+    private func displayID(for screen: NSScreen) -> CGDirectDisplayID? {
+        guard let number = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber else {
+            return nil
+        }
+
+        return CGDirectDisplayID(number.uint32Value)
     }
 }

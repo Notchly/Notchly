@@ -10,14 +10,15 @@ import SwiftUI
 extension ContentView {
     var musicContainer: some View {
         let isWaveformActive = animationsEnabled && musicManager.isPlaying
-
+        let clippedWidth = max(0, layout.islandSize.width + layout.cornerRadius * 2)
+        
         return IslandContainerView(
             size: layout.islandSize,
             cornerRadius: layout.cornerRadius,
             spacing: layout.spacing,
             shadowOpacity: status == .opened || status == .popping ? 0.2 : 0
         ) {
-            if status == .closed || status == .popping {
+            if status == .closed || status == .popping || (status == .focusCollapse && focusCollapseShowsMusic) {
                 CompactMusicView(
                     artwork: musicManager.artworkImage,
                     waveformColor: musicManager.waveformColor,
@@ -47,6 +48,18 @@ extension ContentView {
                         .combined(with: .offset(y: -10))
                 )
                 .zIndex(2)
+            }
+            
+           
+
+            if status == .focusPreview || (status == .focusCollapse && !focusCollapseShowsMusic) {
+                FocusMusicStatusView(
+                    isActive: focusStatusIsActive,
+                    animationID: focusAnimationID,
+                    size: layout.focusPreviewSize
+                )
+                .transition(.opacity.animation(.easeInOut(duration: 0.18)))
+                .zIndex(4)
             }
 
             if status == .opened {
@@ -115,6 +128,8 @@ extension ContentView {
                 .zIndex(3)
             }
         }
+        .frame(width: clippedWidth, height: layout.islandSize.height)
+        .clipped()
         .contentShape(RoundedRectangle(cornerRadius: layout.cornerRadius))
         .overlay(
             ZStack {
@@ -143,6 +158,8 @@ extension ContentView {
 
     func handleMusicScroll(deltaX: CGFloat, deltaY: CGFloat) {
         guard settingsManager.showMusic else { return }
+        guard status != .focusPreview else { return }
+        guard status != .focusCollapse else { return }
 
         let horizontalTriggerThreshold: CGFloat = 14
         let verticalTriggerThreshold: CGFloat = 8
@@ -246,5 +263,39 @@ extension ContentView {
                 }
             }
         }
+    }
+}
+
+private struct FocusMusicStatusView: View {
+    let isActive: Bool
+    let animationID: Int
+    let size: CGSize
+
+    private var accentColor: Color {
+        isActive ? Color(red: 0.62, green: 0.76, blue: 1.0) : .white.opacity(0.76)
+    }
+
+    private var statusText: String {
+        isActive ? "On" : "Off"
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "moon.fill")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(accentColor)
+                .symbolEffect(.bounce, value: animationID)
+            .frame(width: 24, height: 24)
+
+            Spacer()
+
+            Text(statusText)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.9))
+                .contentTransition(.numericText())
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 12)
+        .frame(width: size.width, height: size.height)
     }
 }

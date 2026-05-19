@@ -10,6 +10,7 @@ import SwiftUI
 struct LockScreenOverlayRootView: View {
     @ObservedObject var model: LockScreenOverlayModel
     @ObservedObject var settingsManager: SettingsManager
+    @ObservedObject var focusManager: FocusManager
 
     let batteryManager: BatteryManager
     let dynamicManager: DynamicManager
@@ -53,6 +54,7 @@ struct LockScreenOverlayRootView: View {
                 settingsManager: settingsManager,
                 dynamicManager: dynamicManager,
                 musicManager: musicManager,
+                focusManager: focusManager,
                 animationsEnabled: isRegularIslandVisible
             )
             .padding(.top, 0)
@@ -83,6 +85,7 @@ struct LockScreenOverlayRootView: View {
             .opacity(displayedState == .locked ? 1 : 0)
             .allowsHitTesting(false)
             .zIndex(displayedState == .locked ? 3 : 1)
+
         }
         .frame(width: screenSize.width, height: screenSize.height)
         .animation(.easeOut(duration: 0.16), value: displayedState)
@@ -200,4 +203,5 @@ struct LockScreenOverlayRootView: View {
             showLockScreenPlayer = false
         }
     }
+
 }
