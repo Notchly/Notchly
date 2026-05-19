@@ -13,6 +13,7 @@ struct ContentView: View {
     @ObservedObject var settingsManager: SettingsManager
     @ObservedObject var dynamicManager: DynamicManager
     @ObservedObject var musicManager: MusicManager
+    @ObservedObject var focusManager: FocusManager
     let animationsEnabled: Bool
 
     @State var status: IslandStatus = .closed
@@ -20,8 +21,15 @@ struct ContentView: View {
     @State var isHovered = false
     @State var hasFinishedInitialAppear = false
     @State var autoExpandMusicTask: Task<Void, Never>?
+    @State var focusStatusTask: Task<Void, Never>?
     @State var lastMusicAutoOpenKey: String = ""
     @State var previewAutoCloseKey: String = ""
+    @State var focusReturnStatus: IslandStatus = .closed
+    @State var focusCollapseShowsMusic = true
+    @State var focusStatusIsActive = false
+    @State var focusAnimationID = 0
+    @State var pendingFocusEventIsActive = false
+    @State var pendingFocusEventTimestamp: TimeInterval?
     @State var musicScrollGestureState: Int = 0
     @State var isPointerInsideIsland = false
     @State var playPauseBounce = false
@@ -57,13 +65,32 @@ struct ContentView: View {
         }
         .onChange(of: currentMusicAutoOpenKey) { _, _ in
             handleMusicAutoExpand(isPlaying: musicManager.isPlaying)
+            playPendingFocusEventIfReady()
+        }
+        .onChange(of: dynamicManager.currentModule) { _, _ in
+            playPendingFocusEventIfReady()
+        }
+        .onChange(of: musicManager.isPlaying) { _, _ in
+            playPendingFocusEventIfReady()
+        }
+        .onChange(of: animationsEnabled) { _, _ in
+            playPendingFocusEventIfReady()
         }
         .onChange(of: status) { _, newValue in
             guard newValue != .opened else { return }
             showMusicVolumeControl = false
         }
+        .onChange(of: focusManager.focusEventID) { _, eventID in
+            guard eventID > 0 else { return }
+            handleFocusEvent(isActive: focusManager.focusEventIsActive)
+        }
+        .onChange(of: settingsManager.showFocusAnimations) { _, isEnabled in
+            guard !isEnabled else { return }
+            hideFocusStatusPreview()
+        }
         .animation(.interactiveSpring(duration: 0.32, extraBounce: 0.03), value: isHovered)
         .animation(animation, value: status)
+        .animation(.easeInOut(duration: 0.18), value: focusStatusIsActive)
         .animation(animation, value: showMusicVolumeControl)
         .animation(.easeInOut(duration: 0.22), value: batteryManager.batteryLevel)
         .preferredColorScheme(.dark)

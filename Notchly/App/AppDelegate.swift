@@ -28,11 +28,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
 
         menuController.install()
+        environment.focusManager.start()
         lockScreenController.start()
         overlayController.show()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        environment.focusManager.stop()
         lockScreenController.stop()
+        overlayController.stop()
     }
 }

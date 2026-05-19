@@ -114,7 +114,12 @@ struct ExpandedMusicView: View {
                 }
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SubtleHoverButtonStyle(
+                pressedScale: 0.98,
+                hoverScale: 1.01,
+                hoverBackgroundOpacity: 0.06,
+                cornerRadius: 13
+            ))
 
             VStack(spacing: 6) {
                 if isLivestream {
