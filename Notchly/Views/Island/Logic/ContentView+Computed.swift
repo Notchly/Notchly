@@ -21,13 +21,17 @@ extension ContentView {
 
     var activeModuleView: some View {
         Group {
-            switch dynamicManager.currentModule {
-            case .battery:
-                islandContainer
-            case .music:
+            if status == .focusCollapse || status == .focusPreview {
                 musicContainer
-            case .none:
-                emptyBar
+            } else {
+                switch dynamicManager.currentModule {
+                case .battery:
+                    islandContainer
+                case .music:
+                    musicContainer
+                case .none:
+                    emptyBar
+                }
             }
         }
     }

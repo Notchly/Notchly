@@ -98,9 +98,6 @@ extension ContentView {
 
     var canShowFocusStatusAnimation: Bool {
         animationsEnabled
-            && dynamicManager.currentModule == .music
-            && settingsManager.showMusic
-            && musicManager.hasNowPlayingContent
     }
 
     func queuePendingFocusEvent(isActive: Bool) {
@@ -136,7 +133,6 @@ extension ContentView {
         autoExpandMusicTask?.cancel()
         showMusicVolumeControl = false
         focusStatusIsActive = isActive
-        focusAnimationID += 1
 
         if status == .focusPreview {
             scheduleFocusReturn(
@@ -150,7 +146,14 @@ extension ContentView {
             focusReturnStatus = status
         }
 
-        focusCollapseShowsMusic = status != .focusCollapse || focusCollapseShowsMusic
+        let canCollapseFromMusic =
+            dynamicManager.currentModule == .music &&
+            settingsManager.showMusic &&
+            musicManager.hasNowPlayingContent
+
+        focusCollapseShowsMusic =
+            canCollapseFromMusic &&
+            (status != .focusCollapse || focusCollapseShowsMusic)
 
         withAnimation(.smooth(duration: collapseDuration, extraBounce: 0)) {
             status = .focusCollapse

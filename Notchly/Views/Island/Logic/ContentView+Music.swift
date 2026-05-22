@@ -55,7 +55,6 @@ extension ContentView {
             if status == .focusPreview || (status == .focusCollapse && !focusCollapseShowsMusic) {
                 FocusMusicStatusView(
                     isActive: focusStatusIsActive,
-                    animationID: focusAnimationID,
                     size: layout.focusPreviewSize
                 )
                 .transition(.opacity.animation(.easeInOut(duration: 0.18)))
@@ -106,14 +105,14 @@ extension ContentView {
                         )
                     },
                     onPrevious: {
-                        Task { await musicManager.previousTrack() }
+                        musicManager.previousTrack()
                     },
                     onTogglePlay: {
                         animatePlayPauseButton()
-                        Task { await musicManager.togglePlay() }
+                        musicManager.togglePlay()
                     },
                     onNext: {
-                        Task { await musicManager.nextTrack() }
+                        musicManager.nextTrack()
                     },
                     onOpenSourceApp: {
                         musicManager.openCurrentPlayerApp()
@@ -177,7 +176,7 @@ extension ContentView {
                 performHapticFeedback()
                 showSkipIndicator("forward.fill")
 
-                Task { await musicManager.nextTrack() }
+                musicManager.nextTrack()
                 return
             }
 
@@ -187,7 +186,7 @@ extension ContentView {
                 performHapticFeedback()
                 showSkipIndicator("backward.fill")
 
-                Task { await musicManager.previousTrack() }
+                musicManager.previousTrack()
                 return
             }
 
@@ -268,7 +267,6 @@ extension ContentView {
 
 private struct FocusMusicStatusView: View {
     let isActive: Bool
-    let animationID: Int
     let size: CGSize
 
     private var accentColor: Color {
@@ -284,7 +282,7 @@ private struct FocusMusicStatusView: View {
             Image(systemName: "moon.fill")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(accentColor)
-                .symbolEffect(.bounce, value: animationID)
+                .symbolEffect(.bounce, value: isActive)
             .frame(width: 24, height: 24)
 
             Spacer()

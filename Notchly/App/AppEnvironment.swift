@@ -45,7 +45,7 @@ final class FocusManager: ObservableObject {
     @Published private(set) var focusEventID = 0
     @Published private(set) var focusEventIsActive = false
 
-    private let focusNotificationNames = [
+    private let distributedFocusNotificationNames = [
         "_NSDoNotDisturbEnabledNotification",
         "_NSDoNotDisturbDisabledNotification",
         "com.apple.notificationcenterui.dndprefs_changed",
@@ -57,7 +57,13 @@ final class FocusManager: ObservableObject {
         "com.apple.controlcenter.focusmodes"
     ]
 
-    private var distributedObservers: [NSObjectProtocol] = []
+    private let darwinFocusNotificationNames = [
+        "com.apple.notificationcenter.dnd.state.changed",
+        "com.apple.focus.assertion.state.changed",
+        "com.apple.focus.status.changed"
+    ]
+
+    private var distributedObservers: [FocusDistributedNotificationRelay] = []
     private var darwinNotifyTokens: [Int32] = []
 
     private var dndStateService: AnyObject?
@@ -70,6 +76,7 @@ final class FocusManager: ObservableObject {
     private var isFocusActive = false
     private var lastPublishedEvent: (isActive: Bool, timestamp: TimeInterval)?
     private var lastKnownQueriedState: Bool?
+    private var lastRefreshRequestTime: TimeInterval = 0
 
     func start() {
         guard !isRunning else { return }
@@ -104,21 +111,27 @@ final class FocusManager: ObservableObject {
     private func installDistributedNotificationObservers() {
         let center = DistributedNotificationCenter.default()
 
-        distributedObservers = focusNotificationNames.map { name in
-            center.addObserver(
-                forName: NSNotification.Name(name),
-                object: nil,
-                queue: .main
-            ) { [weak self] _ in
+        distributedObservers = distributedFocusNotificationNames.map { name in
+            let relay = FocusDistributedNotificationRelay(name: name) { [weak self] name in
                 Task { @MainActor [weak self] in
                     self?.handleFocusNotification(named: name)
                 }
             }
+
+            center.addObserver(
+                relay,
+                selector: #selector(FocusDistributedNotificationRelay.receive(_:)),
+                name: NSNotification.Name(name),
+                object: nil,
+                suspensionBehavior: .deliverImmediately
+            )
+
+            return relay
         }
     }
 
     private func installDarwinNotificationObservers() {
-        for name in focusNotificationNames {
+        for name in darwinFocusNotificationNames {
             var token: Int32 = 0
 
             let status = notify_register_dispatch(
@@ -152,44 +165,62 @@ final class FocusManager: ObservableObject {
             setFocusState(false, announceChanges: true)
 
         default:
-            scheduleDelayedFocusRefresh()
+            requestFocusStateRefresh()
         }
     }
 
-    private func scheduleDelayedFocusRefresh() {
-        scheduleDelayedFocusRefresh(after: .milliseconds(250))
+    private func requestFocusStateRefresh() {
+        let now = Date.timeIntervalSinceReferenceDate
+
+        if refreshTask != nil && now - lastRefreshRequestTime < 0.15 {
+            return
+        }
+
+        lastRefreshRequestTime = now
+        scheduleFocusRefreshBurst()
     }
 
-    private func scheduleDelayedFocusRefresh(after delay: Duration) {
+    private func scheduleFocusRefreshBurst() {
         refreshTask?.cancel()
 
+        let delays: [Duration] = [.milliseconds(80), .milliseconds(220), .milliseconds(520)]
+
         refreshTask = Task { [weak self] in
-            try? await Task.sleep(for: delay)
-            guard !Task.isCancelled else { return }
+            for delay in delays {
+                try? await Task.sleep(for: delay)
+                guard !Task.isCancelled else { return }
+
+                await MainActor.run { [weak self] in
+                    _ = self?.refreshFocusState(announceChanges: true)
+                }
+            }
 
             await MainActor.run { [weak self] in
-                self?.refreshFocusState(announceChanges: true)
+                self?.refreshTask = nil
             }
         }
     }
 
     // MARK: - State
 
-    private func refreshFocusState(announceChanges: Bool) {
-        guard isRunning else { return }
+    @discardableResult
+    private func refreshFocusState(announceChanges: Bool) -> Bool {
+        guard isRunning else { return false }
 
         if let queriedState = queryDNDStateService() {
             lastKnownQueriedState = queriedState
-            setFocusState(queriedState, announceChanges: announceChanges)
-            return
+            return setFocusState(queriedState, announceChanges: announceChanges)
         }
 
         if let lastKnownQueriedState {
-            setFocusState(lastKnownQueriedState, announceChanges: announceChanges)
+            return setFocusState(lastKnownQueriedState, announceChanges: announceChanges)
         }
+
+        return false
     }
 
-    private func setFocusState(_ isActive: Bool, announceChanges: Bool) {
+    @discardableResult
+    private func setFocusState(_ isActive: Bool, announceChanges: Bool) -> Bool {
         let didChange = isFocusActive != isActive
 
         if didChange {
@@ -199,6 +230,8 @@ final class FocusManager: ObservableObject {
         if announceChanges && didChange {
             publishFocusEvent(isActive)
         }
+
+        return didChange
     }
 
     private func publishFocusEvent(_ isActive: Bool) {
@@ -357,29 +390,46 @@ final class FocusManager: ObservableObject {
     }
 
     private func queryDNDStateService() -> Bool? {
-        guard let service = dndStateService,
-              let serviceClass = dndStateServiceClass else {
-            return nil
+        autoreleasepool {
+            guard let service = dndStateService,
+                  let serviceClass = dndStateServiceClass else {
+                return nil
+            }
+
+            let selector = NSSelectorFromString("queryCurrentStateWithError:")
+
+            guard let implementation = class_getMethodImplementation(serviceClass, selector) else {
+                return nil
+            }
+
+            typealias QueryFunction = @convention(c) (
+                AnyObject,
+                Selector,
+                AutoreleasingUnsafeMutablePointer<NSError?>?
+            ) -> AnyObject?
+
+            var error: NSError?
+            let query = unsafeBitCast(implementation, to: QueryFunction.self)
+
+            guard let state = query(service, selector, &error) else { return nil }
+
+            return DNDStateUpdateListener.isFocusActive(in: state)
         }
+    }
+}
 
-        let selector = NSSelectorFromString("queryCurrentStateWithError:")
+private final class FocusDistributedNotificationRelay: NSObject {
+    private let name: String
+    private let handler: (String) -> Void
 
-        guard let implementation = class_getMethodImplementation(serviceClass, selector) else {
-            return nil
-        }
+    init(name: String, handler: @escaping (String) -> Void) {
+        self.name = name
+        self.handler = handler
+        super.init()
+    }
 
-        typealias QueryFunction = @convention(c) (
-            AnyObject,
-            Selector,
-            AutoreleasingUnsafeMutablePointer<NSError?>?
-        ) -> AnyObject?
-
-        var error: NSError?
-        let query = unsafeBitCast(implementation, to: QueryFunction.self)
-
-        guard let state = query(service, selector, &error) else { return nil }
-
-        return DNDStateUpdateListener.isFocusActive(in: state)
+    @objc func receive(_ notification: Notification) {
+        handler(name)
     }
 }
 
@@ -424,15 +474,17 @@ private final class DNDStateUpdateListener: NSObject {
     }
 
     private func handleUpdate(_ update: AnyObject) {
-        if let updateObject = update as? NSObject,
-           let state = updateObject.safeObjectValue(forKey: "state"),
-           let isActive = Self.isFocusActive(in: state) {
-            onUpdate(isActive)
-            return
-        }
+        autoreleasepool {
+            if let updateObject = update as? NSObject,
+               let state = updateObject.safeObjectValue(forKey: "state"),
+               let isActive = Self.isFocusActive(in: state) {
+                onUpdate(isActive)
+                return
+            }
 
-        if let isActive = Self.isFocusActive(in: update) {
-            onUpdate(isActive)
+            if let isActive = Self.isFocusActive(in: update) {
+                onUpdate(isActive)
+            }
         }
     }
 
