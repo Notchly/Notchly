@@ -273,25 +273,21 @@ struct LockScreenMusicPlayerView: View {
 
     private func togglePlay() {
         playPauseBounce = true
+        musicManager.togglePlay()
 
-        Task {
-            await musicManager.togglePlay()
-
-            try? await Task.sleep(nanoseconds: 180_000_000)
-            await MainActor.run {
-                playPauseBounce = false
-            }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+            playPauseBounce = false
         }
     }
 
     private func previousTrack() {
         animateSkip(direction: -1)
-        Task { await musicManager.previousTrack() }
+        musicManager.previousTrack()
     }
 
     private func nextTrack() {
         animateSkip(direction: 1)
-        Task { await musicManager.nextTrack() }
+        musicManager.nextTrack()
     }
 
     private func animateSkip(direction: CGFloat) {

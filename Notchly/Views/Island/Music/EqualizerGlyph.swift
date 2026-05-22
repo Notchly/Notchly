@@ -92,6 +92,10 @@ final class EqualizerGlyphNSView: NSView {
         layer?.masksToBounds = false
     }
 
+    deinit {
+        barLayers.forEach { $0.removeAllAnimations() }
+    }
+
     override var intrinsicContentSize: NSSize {
         NSSize(width: totalWidth, height: maxHeight)
     }

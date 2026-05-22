@@ -105,14 +105,14 @@ extension ContentView {
                         )
                     },
                     onPrevious: {
-                        Task { await musicManager.previousTrack() }
+                        musicManager.previousTrack()
                     },
                     onTogglePlay: {
                         animatePlayPauseButton()
-                        Task { await musicManager.togglePlay() }
+                        musicManager.togglePlay()
                     },
                     onNext: {
-                        Task { await musicManager.nextTrack() }
+                        musicManager.nextTrack()
                     },
                     onOpenSourceApp: {
                         musicManager.openCurrentPlayerApp()
@@ -176,7 +176,7 @@ extension ContentView {
                 performHapticFeedback()
                 showSkipIndicator("forward.fill")
 
-                Task { await musicManager.nextTrack() }
+                musicManager.nextTrack()
                 return
             }
 
@@ -186,7 +186,7 @@ extension ContentView {
                 performHapticFeedback()
                 showSkipIndicator("backward.fill")
 
-                Task { await musicManager.previousTrack() }
+                musicManager.previousTrack()
                 return
             }
 

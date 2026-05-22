@@ -45,7 +45,7 @@ final class MusicManager: ObservableObject {
     }
 
     nonisolated private let mediaController = MediaController()
-    private var progressTimer: Timer?
+    private var progressTask: Task<Void, Never>?
     private var volumePollTimer: Timer?
 
     private var basePlaybackPosition: Double = 0
@@ -80,8 +80,8 @@ final class MusicManager: ObservableObject {
     }
 
     deinit {
-        progressTimer?.invalidate()
-        progressTimer = nil
+        progressTask?.cancel()
+        progressTask = nil
         volumePollTimer?.invalidate()
         volumePollTimer = nil
         mediaController.stopListening()
@@ -235,24 +235,27 @@ final class MusicManager: ObservableObject {
 
     @MainActor
     private func startProgressTimerIfNeeded() {
-        guard progressTimer == nil else { return }
+        guard progressTask == nil else { return }
         guard isPlaying, durationMs > 0 else { return }
 
-        progressTimer = Timer.scheduledTimer(withTimeInterval: progressTickInterval, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated {
-                self?.tickProgress()
-            }
-        }
+        let tickInterval = progressTickInterval
 
-        if let progressTimer {
-            RunLoop.main.add(progressTimer, forMode: .common)
+        progressTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(tickInterval))
+                guard !Task.isCancelled else { return }
+
+                await MainActor.run { [weak self] in
+                    self?.tickProgress()
+                }
+            }
         }
     }
 
     @MainActor
     private func stopProgressTimer() {
-        progressTimer?.invalidate()
-        progressTimer = nil
+        progressTask?.cancel()
+        progressTask = nil
     }
 
     @MainActor
@@ -333,15 +336,15 @@ final class MusicManager: ObservableObject {
         }
     }
 
-    func togglePlay() async {
+    func togglePlay() {
         mediaController.togglePlayPause()
     }
 
-    func nextTrack() async {
+    func nextTrack() {
         mediaController.nextTrack()
     }
 
-    func previousTrack() async {
+    func previousTrack() {
         mediaController.previousTrack()
     }
 
