@@ -54,10 +54,13 @@ final class FocusManager: ObservableObject {
         "com.apple.focus.statusChanged",
         "com.apple.donotdisturb.statusChanged",
         "com.apple.menuextra.focusmode",
-        "com.apple.controlcenter.focusmodes"
+        "com.apple.controlcenter.focusmodes",
+        "com.apple.notificationcenter.dnd.state.changed",
+        "com.apple.focus.assertion.state.changed",
+        "com.apple.focus.status.changed"
     ]
 
-    private var distributedObservers: [NSObjectProtocol] = []
+    private var distributedObservers: [FocusDistributedNotificationRelay] = []
     private var darwinNotifyTokens: [Int32] = []
 
     private var dndStateService: AnyObject?
@@ -105,15 +108,21 @@ final class FocusManager: ObservableObject {
         let center = DistributedNotificationCenter.default()
 
         distributedObservers = focusNotificationNames.map { name in
-            center.addObserver(
-                forName: NSNotification.Name(name),
-                object: nil,
-                queue: .main
-            ) { [weak self] _ in
+            let relay = FocusDistributedNotificationRelay(name: name) { [weak self] name in
                 Task { @MainActor [weak self] in
                     self?.handleFocusNotification(named: name)
                 }
             }
+
+            center.addObserver(
+                relay,
+                selector: #selector(FocusDistributedNotificationRelay.receive(_:)),
+                name: NSNotification.Name(name),
+                object: nil,
+                suspensionBehavior: .deliverImmediately
+            )
+
+            return relay
         }
     }
 
@@ -152,44 +161,54 @@ final class FocusManager: ObservableObject {
             setFocusState(false, announceChanges: true)
 
         default:
-            scheduleDelayedFocusRefresh()
+            let didChange = refreshFocusState(announceChanges: true)
+            scheduleFocusRefreshBurst(didChangeImmediately: didChange)
         }
     }
 
-    private func scheduleDelayedFocusRefresh() {
-        scheduleDelayedFocusRefresh(after: .milliseconds(250))
-    }
-
-    private func scheduleDelayedFocusRefresh(after delay: Duration) {
+    private func scheduleFocusRefreshBurst(didChangeImmediately: Bool) {
         refreshTask?.cancel()
 
+        let delays: [Duration] = didChangeImmediately
+            ? [.milliseconds(180), .milliseconds(500)]
+            : [.milliseconds(60), .milliseconds(160), .milliseconds(320), .milliseconds(700)]
+
         refreshTask = Task { [weak self] in
-            try? await Task.sleep(for: delay)
-            guard !Task.isCancelled else { return }
+            for delay in delays {
+                try? await Task.sleep(for: delay)
+                guard !Task.isCancelled else { return }
+
+                await MainActor.run { [weak self] in
+                    _ = self?.refreshFocusState(announceChanges: true)
+                }
+            }
 
             await MainActor.run { [weak self] in
-                self?.refreshFocusState(announceChanges: true)
+                self?.refreshTask = nil
             }
         }
     }
 
     // MARK: - State
 
-    private func refreshFocusState(announceChanges: Bool) {
-        guard isRunning else { return }
+    @discardableResult
+    private func refreshFocusState(announceChanges: Bool) -> Bool {
+        guard isRunning else { return false }
 
         if let queriedState = queryDNDStateService() {
             lastKnownQueriedState = queriedState
-            setFocusState(queriedState, announceChanges: announceChanges)
-            return
+            return setFocusState(queriedState, announceChanges: announceChanges)
         }
 
         if let lastKnownQueriedState {
-            setFocusState(lastKnownQueriedState, announceChanges: announceChanges)
+            return setFocusState(lastKnownQueriedState, announceChanges: announceChanges)
         }
+
+        return false
     }
 
-    private func setFocusState(_ isActive: Bool, announceChanges: Bool) {
+    @discardableResult
+    private func setFocusState(_ isActive: Bool, announceChanges: Bool) -> Bool {
         let didChange = isFocusActive != isActive
 
         if didChange {
@@ -199,6 +218,8 @@ final class FocusManager: ObservableObject {
         if announceChanges && didChange {
             publishFocusEvent(isActive)
         }
+
+        return didChange
     }
 
     private func publishFocusEvent(_ isActive: Bool) {
@@ -380,6 +401,21 @@ final class FocusManager: ObservableObject {
         guard let state = query(service, selector, &error) else { return nil }
 
         return DNDStateUpdateListener.isFocusActive(in: state)
+    }
+}
+
+private final class FocusDistributedNotificationRelay: NSObject {
+    private let name: String
+    private let handler: (String) -> Void
+
+    init(name: String, handler: @escaping (String) -> Void) {
+        self.name = name
+        self.handler = handler
+        super.init()
+    }
+
+    @objc func receive(_ notification: Notification) {
+        handler(name)
     }
 }
 
