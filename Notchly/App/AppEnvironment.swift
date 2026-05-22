@@ -45,7 +45,7 @@ final class FocusManager: ObservableObject {
     @Published private(set) var focusEventID = 0
     @Published private(set) var focusEventIsActive = false
 
-    private let focusNotificationNames = [
+    private let distributedFocusNotificationNames = [
         "_NSDoNotDisturbEnabledNotification",
         "_NSDoNotDisturbDisabledNotification",
         "com.apple.notificationcenterui.dndprefs_changed",
@@ -54,7 +54,10 @@ final class FocusManager: ObservableObject {
         "com.apple.focus.statusChanged",
         "com.apple.donotdisturb.statusChanged",
         "com.apple.menuextra.focusmode",
-        "com.apple.controlcenter.focusmodes",
+        "com.apple.controlcenter.focusmodes"
+    ]
+
+    private let darwinFocusNotificationNames = [
         "com.apple.notificationcenter.dnd.state.changed",
         "com.apple.focus.assertion.state.changed",
         "com.apple.focus.status.changed"
@@ -73,6 +76,7 @@ final class FocusManager: ObservableObject {
     private var isFocusActive = false
     private var lastPublishedEvent: (isActive: Bool, timestamp: TimeInterval)?
     private var lastKnownQueriedState: Bool?
+    private var lastRefreshRequestTime: TimeInterval = 0
 
     func start() {
         guard !isRunning else { return }
@@ -107,7 +111,7 @@ final class FocusManager: ObservableObject {
     private func installDistributedNotificationObservers() {
         let center = DistributedNotificationCenter.default()
 
-        distributedObservers = focusNotificationNames.map { name in
+        distributedObservers = distributedFocusNotificationNames.map { name in
             let relay = FocusDistributedNotificationRelay(name: name) { [weak self] name in
                 Task { @MainActor [weak self] in
                     self?.handleFocusNotification(named: name)
@@ -127,7 +131,7 @@ final class FocusManager: ObservableObject {
     }
 
     private func installDarwinNotificationObservers() {
-        for name in focusNotificationNames {
+        for name in darwinFocusNotificationNames {
             var token: Int32 = 0
 
             let status = notify_register_dispatch(
@@ -161,17 +165,25 @@ final class FocusManager: ObservableObject {
             setFocusState(false, announceChanges: true)
 
         default:
-            let didChange = refreshFocusState(announceChanges: true)
-            scheduleFocusRefreshBurst(didChangeImmediately: didChange)
+            requestFocusStateRefresh()
         }
     }
 
-    private func scheduleFocusRefreshBurst(didChangeImmediately: Bool) {
+    private func requestFocusStateRefresh() {
+        let now = Date.timeIntervalSinceReferenceDate
+
+        if refreshTask != nil && now - lastRefreshRequestTime < 0.15 {
+            return
+        }
+
+        lastRefreshRequestTime = now
+        scheduleFocusRefreshBurst()
+    }
+
+    private func scheduleFocusRefreshBurst() {
         refreshTask?.cancel()
 
-        let delays: [Duration] = didChangeImmediately
-            ? [.milliseconds(180), .milliseconds(500)]
-            : [.milliseconds(60), .milliseconds(160), .milliseconds(320), .milliseconds(700)]
+        let delays: [Duration] = [.milliseconds(80), .milliseconds(220), .milliseconds(520)]
 
         refreshTask = Task { [weak self] in
             for delay in delays {
@@ -378,29 +390,31 @@ final class FocusManager: ObservableObject {
     }
 
     private func queryDNDStateService() -> Bool? {
-        guard let service = dndStateService,
-              let serviceClass = dndStateServiceClass else {
-            return nil
+        autoreleasepool {
+            guard let service = dndStateService,
+                  let serviceClass = dndStateServiceClass else {
+                return nil
+            }
+
+            let selector = NSSelectorFromString("queryCurrentStateWithError:")
+
+            guard let implementation = class_getMethodImplementation(serviceClass, selector) else {
+                return nil
+            }
+
+            typealias QueryFunction = @convention(c) (
+                AnyObject,
+                Selector,
+                AutoreleasingUnsafeMutablePointer<NSError?>?
+            ) -> AnyObject?
+
+            var error: NSError?
+            let query = unsafeBitCast(implementation, to: QueryFunction.self)
+
+            guard let state = query(service, selector, &error) else { return nil }
+
+            return DNDStateUpdateListener.isFocusActive(in: state)
         }
-
-        let selector = NSSelectorFromString("queryCurrentStateWithError:")
-
-        guard let implementation = class_getMethodImplementation(serviceClass, selector) else {
-            return nil
-        }
-
-        typealias QueryFunction = @convention(c) (
-            AnyObject,
-            Selector,
-            AutoreleasingUnsafeMutablePointer<NSError?>?
-        ) -> AnyObject?
-
-        var error: NSError?
-        let query = unsafeBitCast(implementation, to: QueryFunction.self)
-
-        guard let state = query(service, selector, &error) else { return nil }
-
-        return DNDStateUpdateListener.isFocusActive(in: state)
     }
 }
 
@@ -460,15 +474,17 @@ private final class DNDStateUpdateListener: NSObject {
     }
 
     private func handleUpdate(_ update: AnyObject) {
-        if let updateObject = update as? NSObject,
-           let state = updateObject.safeObjectValue(forKey: "state"),
-           let isActive = Self.isFocusActive(in: state) {
-            onUpdate(isActive)
-            return
-        }
+        autoreleasepool {
+            if let updateObject = update as? NSObject,
+               let state = updateObject.safeObjectValue(forKey: "state"),
+               let isActive = Self.isFocusActive(in: state) {
+                onUpdate(isActive)
+                return
+            }
 
-        if let isActive = Self.isFocusActive(in: update) {
-            onUpdate(isActive)
+            if let isActive = Self.isFocusActive(in: update) {
+                onUpdate(isActive)
+            }
         }
     }
 

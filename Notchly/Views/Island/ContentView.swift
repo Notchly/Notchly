@@ -27,7 +27,6 @@ struct ContentView: View {
     @State var focusReturnStatus: IslandStatus = .closed
     @State var focusCollapseShowsMusic = true
     @State var focusStatusIsActive = false
-    @State var focusAnimationID = 0
     @State var pendingFocusEventIsActive = false
     @State var pendingFocusEventTimestamp: TimeInterval?
     @State var musicScrollGestureState: Int = 0

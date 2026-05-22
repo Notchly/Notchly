@@ -133,7 +133,6 @@ extension ContentView {
         autoExpandMusicTask?.cancel()
         showMusicVolumeControl = false
         focusStatusIsActive = isActive
-        focusAnimationID += 1
 
         if status == .focusPreview {
             scheduleFocusReturn(
