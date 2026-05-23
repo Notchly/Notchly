@@ -31,19 +31,21 @@ struct SettingsView: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 18) {
+                    sidebarButton(.general)
+
                     sidebarGroup(
-                        title: "Application",
-                        sections: [.about, .general, .focus]
+                        title: "Notifications",
+                        sections: [.focus, .brightness, .battery]
                     )
 
                     sidebarGroup(
-                        title: "Media & Files",
+                        title: "Live Activities",
                         sections: [.music]
                     )
 
                     sidebarGroup(
-                        title: "System",
-                        sections: [.battery]
+                        title: "Notchly",
+                        sections: [.about]
                     )
                 }
             }
@@ -221,6 +223,9 @@ struct SettingsView: View {
         case .focus:
             FocusSettingsView(settingsManager: settingsManager)
 
+        case .brightness:
+            BrightnessSettingsView(settingsManager: settingsManager)
+
         case .battery:
             BatterySettingsView(settingsManager: settingsManager)
 
@@ -269,6 +274,8 @@ struct SettingsView: View {
                 settingsManager.resetGeneralSettings()
             case .focus:
                 settingsManager.resetFocusSettings()
+            case .brightness:
+                settingsManager.resetBrightnessSettings()
             case .battery:
                 settingsManager.resetBatterySettings()
             case .music:

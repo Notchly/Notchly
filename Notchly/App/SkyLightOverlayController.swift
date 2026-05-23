@@ -102,6 +102,7 @@ final class SkyLightOverlayController {
                 batteryManager: environment.batteryManager,
                 dynamicManager: environment.dynamicManager,
                 musicManager: environment.musicManager,
+                brightnessManager: environment.brightnessManager,
                 screenSize: screen.frame.size
             )
         )

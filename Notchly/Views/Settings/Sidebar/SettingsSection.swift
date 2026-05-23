@@ -10,6 +10,7 @@ import SwiftUI
 enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
     case general = "General"
     case focus = "Focus"
+    case brightness = "Brightness"
     case music = "Now Playing"
     case battery = "Battery"
     case about = "About"
@@ -22,6 +23,8 @@ enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
             return "gear"
         case .focus:
             return "moon.fill"
+        case .brightness:
+            return "sun.max.fill"
         case .music:
             return "music.note"
         case .battery:
@@ -37,6 +40,8 @@ enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
             return .blue
         case .focus:
             return .indigo
+        case .brightness:
+            return .yellow
         case .music:
             return .red
         case .battery:
@@ -52,6 +57,8 @@ enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
             return "Configure the core Notchly experience."
         case .focus:
             return "Customize Focus status animations."
+        case .brightness:
+            return "Customize brightness status and indicator layout."
         case .music:
             return "Customize now playing controls and previews."
         case .battery:

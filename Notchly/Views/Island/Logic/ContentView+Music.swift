@@ -18,7 +18,10 @@ extension ContentView {
             spacing: layout.spacing,
             shadowOpacity: status == .opened || status == .popping ? 0.2 : 0
         ) {
-            if status == .closed || status == .popping || (status == .focusCollapse && focusCollapseShowsMusic) {
+            if status == .closed ||
+                status == .popping ||
+                (status == .focusCollapse && focusCollapseShowsMusic) ||
+                (status == .brightnessCollapse && brightnessCollapseShowsMusic) {
                 CompactMusicView(
                     artwork: musicManager.artworkImage,
                     waveformColor: musicManager.waveformColor,
@@ -57,6 +60,18 @@ extension ContentView {
                     isActive: focusStatusIsActive,
                     hidesLabel: settingsManager.hideFocusLabel,
                     size: layout.focusPreviewSize
+                )
+                .transition(.opacity.animation(.easeInOut(duration: 0.18)))
+                .zIndex(4)
+            }
+
+            if status == .brightnessPreview || (status == .brightnessCollapse && !brightnessCollapseShowsMusic) {
+                BrightnessStatusView(
+                    brightness: brightnessManager.brightnessLevel,
+                    lineWidth: CGFloat(settingsManager.brightnessLineWidth),
+                    showsLine: settingsManager.showBrightnessLine,
+                    showsPercent: settingsManager.showBrightnessPercent,
+                    size: layout.brightnessPreviewSize
                 )
                 .transition(.opacity.animation(.easeInOut(duration: 0.18)))
                 .zIndex(4)
@@ -160,6 +175,8 @@ extension ContentView {
         guard settingsManager.showMusic else { return }
         guard status != .focusPreview else { return }
         guard status != .focusCollapse else { return }
+        guard status != .brightnessPreview else { return }
+        guard status != .brightnessCollapse else { return }
 
         let horizontalTriggerThreshold: CGFloat = 14
         let verticalTriggerThreshold: CGFloat = 8
@@ -299,5 +316,84 @@ private struct FocusMusicStatusView: View {
         }
         .padding(.horizontal, 12)
         .frame(width: size.width, height: size.height)
+    }
+}
+
+private struct BrightnessStatusView: View {
+    let brightness: Double
+    let lineWidth: CGFloat
+    let showsLine: Bool
+    let showsPercent: Bool
+    let size: CGSize
+
+    private var clampedBrightness: Double {
+        min(max(brightness, 0), 1)
+    }
+
+    private var percentage: Int {
+        Int((clampedBrightness * 100).rounded())
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: brightnessSymbolName)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Color(red: 1.0, green: 0.86, blue: 0.38))
+                .frame(width: 24, height: 24)
+
+            Spacer(minLength: 0)
+
+            HStack(spacing: 4) {
+                if showsLine {
+                    GeometryReader { geo in
+                        let width = max(geo.size.width, 1)
+                        let fillWidth = width * clampedBrightness
+
+                        ZStack(alignment: .leading) {
+                            Capsule()
+                                .fill(Color.white.opacity(0.18))
+                                .frame(height: 5)
+
+                            Capsule()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            Color.white.opacity(0.95),
+                                            Color(red: 1.0, green: 0.82, blue: 0.32)
+                                        ],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .frame(width: fillWidth, height: 5)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                    .frame(width: lineWidth, height: 20)
+                }
+
+                if showsPercent {
+                    Text("\(percentage)")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.9))
+                        .contentTransition(.numericText())
+                        .monospacedDigit()
+                        .frame(width: 30, alignment: .trailing)
+                }
+            }
+        }
+        .padding(.horizontal, 12)
+        .frame(width: size.width, height: size.height)
+    }
+
+    private var brightnessSymbolName: String {
+        switch percentage {
+        case 0...25:
+            return "sun.min.fill"
+        case 26...75:
+            return "sun.max"
+        default:
+            return "sun.max.fill"
+        }
     }
 }

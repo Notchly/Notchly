@@ -14,6 +14,7 @@ extension ContentView {
         showChargingPop = false
         isHovered = false
         hideFocusStatusPreview(animated: false)
+        hideBrightnessStatusPreview(animated: false)
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
             hasFinishedInitialAppear = true
@@ -130,9 +131,11 @@ extension ContentView {
         let collapseDuration = 0.34
 
         focusStatusTask?.cancel()
+        brightnessStatusTask?.cancel()
         autoExpandMusicTask?.cancel()
         showMusicVolumeControl = false
         focusStatusIsActive = isActive
+        pendingBrightnessEventTimestamp = nil
 
         if status == .focusPreview {
             scheduleFocusReturn(
@@ -224,6 +227,148 @@ extension ContentView {
         }
     }
 
+    func handleBrightnessEvent() {
+        guard settingsManager.showBrightnessStatus else { return }
+
+        guard canShowBrightnessStatusAnimation else {
+            queuePendingBrightnessEvent()
+            return
+        }
+
+        pendingBrightnessEventTimestamp = nil
+        startBrightnessStatusAnimation()
+    }
+
+    var canShowBrightnessStatusAnimation: Bool {
+        animationsEnabled && settingsManager.showBrightnessStatus
+    }
+
+    func queuePendingBrightnessEvent() {
+        pendingBrightnessEventTimestamp = Date.timeIntervalSinceReferenceDate
+    }
+
+    func playPendingBrightnessEventIfReady() {
+        guard let timestamp = pendingBrightnessEventTimestamp else { return }
+
+        guard Date.timeIntervalSinceReferenceDate - timestamp < 2.5 else {
+            pendingBrightnessEventTimestamp = nil
+            return
+        }
+
+        guard canShowBrightnessStatusAnimation else { return }
+
+        pendingBrightnessEventTimestamp = nil
+        startBrightnessStatusAnimation()
+    }
+
+    private func startBrightnessStatusAnimation() {
+        let collapseDuration = 0.34
+
+        if status == .brightnessCollapse {
+            return
+        }
+
+        brightnessStatusTask?.cancel()
+        focusStatusTask?.cancel()
+        autoExpandMusicTask?.cancel()
+        showMusicVolumeControl = false
+        pendingFocusEventTimestamp = nil
+
+        if status == .brightnessPreview {
+            scheduleBrightnessReturn(
+                returnStatus: brightnessReturnStatus,
+                collapseDuration: collapseDuration
+            )
+            return
+        }
+
+        if status == .focusPreview || status == .focusCollapse {
+            focusCollapseShowsMusic = true
+            status = focusReturnStatus
+        }
+
+        if status != .brightnessPreview && status != .brightnessCollapse {
+            brightnessReturnStatus = status
+        }
+
+        let canCollapseFromMusic =
+            dynamicManager.currentModule == .music &&
+            settingsManager.showMusic &&
+            musicManager.hasNowPlayingContent
+
+        brightnessCollapseShowsMusic =
+            canCollapseFromMusic &&
+            (status != .brightnessCollapse || brightnessCollapseShowsMusic)
+
+        withAnimation(.smooth(duration: collapseDuration, extraBounce: 0)) {
+            status = .brightnessCollapse
+        }
+
+        let returnStatus = brightnessReturnStatus
+
+        brightnessStatusTask = Task {
+            try? await Task.sleep(for: .seconds(collapseDuration))
+            guard !Task.isCancelled else { return }
+
+            await MainActor.run {
+                guard status == .brightnessCollapse else { return }
+
+                brightnessCollapseShowsMusic = false
+
+                withAnimation(.smooth(duration: 0.42, extraBounce: 0)) {
+                    status = .brightnessPreview
+                }
+            }
+
+            await MainActor.run {
+                scheduleBrightnessReturn(
+                    returnStatus: returnStatus,
+                    collapseDuration: collapseDuration
+                )
+            }
+        }
+    }
+
+    func scheduleBrightnessReturn(
+        returnStatus: IslandStatus,
+        collapseDuration: Double
+    ) {
+        brightnessStatusTask?.cancel()
+
+        brightnessStatusTask = Task {
+            try? await Task.sleep(for: .seconds(1.3))
+            guard !Task.isCancelled else { return }
+
+            await MainActor.run {
+                guard status == .brightnessPreview else { return }
+
+                brightnessCollapseShowsMusic = false
+
+                withAnimation(.smooth(duration: collapseDuration, extraBounce: 0)) {
+                    status = .brightnessCollapse
+                }
+            }
+
+            try? await Task.sleep(for: .seconds(collapseDuration))
+            guard !Task.isCancelled else { return }
+
+            await MainActor.run {
+                guard status == .brightnessCollapse else { return }
+
+                brightnessCollapseShowsMusic = true
+                brightnessStatusTask = nil
+
+                withAnimation(.smooth(duration: 0.42, extraBounce: 0)) {
+                    status = returnStatus
+                }
+
+                if (returnStatus == .opened || returnStatus == .musicPreview) && !isPointerInsideIsland {
+                    scheduleAutoClose(after: 2.0)
+                }
+            }
+        }
+    }
+
     func hideFocusStatusPreview(animated: Bool = true) {
         focusStatusTask?.cancel()
         focusStatusTask = nil
@@ -234,6 +379,25 @@ extension ContentView {
         let updates = {
             focusCollapseShowsMusic = true
             status = focusReturnStatus
+        }
+
+        if animated {
+            withAnimation(animation, updates)
+        } else {
+            updates()
+        }
+    }
+
+    func hideBrightnessStatusPreview(animated: Bool = true) {
+        brightnessStatusTask?.cancel()
+        brightnessStatusTask = nil
+        pendingBrightnessEventTimestamp = nil
+
+        guard status == .brightnessPreview || status == .brightnessCollapse else { return }
+
+        let updates = {
+            brightnessCollapseShowsMusic = true
+            status = brightnessReturnStatus
         }
 
         if animated {

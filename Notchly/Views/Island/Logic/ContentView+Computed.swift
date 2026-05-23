@@ -15,13 +15,14 @@ extension ContentView {
             isMusicModule: dynamicManager.currentModule == .music,
             showChargingPop: showChargingPop,
             isMusicVolumeControlExpanded: showMusicVolumeControl,
-            closedHeight: closedHeight
+            closedHeight: closedHeight,
+            islandWidth: CGFloat(settingsManager.islandWidth)
         )
     }
 
     var activeModuleView: some View {
         Group {
-            if status == .focusCollapse || status == .focusPreview {
+            if status == .focusCollapse || status == .focusPreview || status == .brightnessCollapse || status == .brightnessPreview {
                 musicContainer
             } else {
                 switch dynamicManager.currentModule {
@@ -55,6 +56,10 @@ extension ContentView {
         case .focusCollapse:
             return 1.0
         case .focusPreview:
+            return 1.01
+        case .brightnessCollapse:
+            return 1.0
+        case .brightnessPreview:
             return 1.01
         }
     }

@@ -14,6 +14,7 @@ struct ContentView: View {
     @ObservedObject var dynamicManager: DynamicManager
     @ObservedObject var musicManager: MusicManager
     @ObservedObject var focusManager: FocusManager
+    @ObservedObject var brightnessManager: BrightnessManager
     let animationsEnabled: Bool
 
     @State var status: IslandStatus = .closed
@@ -29,6 +30,10 @@ struct ContentView: View {
     @State var focusStatusIsActive = false
     @State var pendingFocusEventIsActive = false
     @State var pendingFocusEventTimestamp: TimeInterval?
+    @State var brightnessStatusTask: Task<Void, Never>?
+    @State var brightnessReturnStatus: IslandStatus = .closed
+    @State var brightnessCollapseShowsMusic = true
+    @State var pendingBrightnessEventTimestamp: TimeInterval?
     @State var musicScrollGestureState: Int = 0
     @State var isPointerInsideIsland = false
     @State var playPauseBounce = false
@@ -38,7 +43,9 @@ struct ContentView: View {
     @State var resolvedClosedHeight: CGFloat = 36
     
     private func updateClosedHeight(for screen: NSScreen?) {
-        resolvedClosedHeight = IslandHeightResolver.closedHeight(for: screen)
+        let nextHeight = IslandHeightResolver.closedHeight(for: screen)
+        guard resolvedClosedHeight != nextHeight else { return }
+        resolvedClosedHeight = nextHeight
     }
 
     var body: some View {
@@ -65,15 +72,19 @@ struct ContentView: View {
         .onChange(of: currentMusicAutoOpenKey) { _, _ in
             handleMusicAutoExpand(isPlaying: musicManager.isPlaying)
             playPendingFocusEventIfReady()
+            playPendingBrightnessEventIfReady()
         }
         .onChange(of: dynamicManager.currentModule) { _, _ in
             playPendingFocusEventIfReady()
+            playPendingBrightnessEventIfReady()
         }
         .onChange(of: musicManager.isPlaying) { _, _ in
             playPendingFocusEventIfReady()
+            playPendingBrightnessEventIfReady()
         }
         .onChange(of: animationsEnabled) { _, _ in
             playPendingFocusEventIfReady()
+            playPendingBrightnessEventIfReady()
         }
         .onChange(of: status) { _, newValue in
             guard newValue != .opened else { return }
@@ -83,13 +94,22 @@ struct ContentView: View {
             guard eventID > 0 else { return }
             handleFocusEvent(isActive: focusManager.focusEventIsActive)
         }
+        .onChange(of: brightnessManager.brightnessEventID) { _, eventID in
+            guard eventID > 0 else { return }
+            handleBrightnessEvent()
+        }
         .onChange(of: settingsManager.showFocusAnimations) { _, isEnabled in
             guard !isEnabled else { return }
             hideFocusStatusPreview()
         }
+        .onChange(of: settingsManager.showBrightnessStatus) { _, isEnabled in
+            guard !isEnabled else { return }
+            hideBrightnessStatusPreview()
+        }
         .animation(.interactiveSpring(duration: 0.32, extraBounce: 0.03), value: isHovered)
         .animation(animation, value: status)
         .animation(.easeInOut(duration: 0.18), value: focusStatusIsActive)
+        .animation(.easeInOut(duration: 0.18), value: brightnessManager.brightnessLevel)
         .animation(animation, value: showMusicVolumeControl)
         .animation(.easeInOut(duration: 0.22), value: batteryManager.batteryLevel)
         .preferredColorScheme(.dark)

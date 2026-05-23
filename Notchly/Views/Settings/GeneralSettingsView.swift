@@ -20,6 +20,36 @@ struct GeneralSettingsView: View {
 
                     SettingsDivider()
 
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("Island Width")
+                                    .font(.system(size: 13, weight: .medium))
+
+                                Text("Set the base width used by the dynamic island.")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Spacer()
+
+                            Text("\(Int(settingsManager.islandWidth))px")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                        }
+
+                        Slider(
+                            value: $settingsManager.islandWidth,
+                            in: 280...360,
+                            step: 2
+                        )
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+
+                    SettingsDivider()
+
                     SettingsToggleRow(
                         title: "Launch at Login",
                         subtitle: "Open Notchly automatically when you sign in.",

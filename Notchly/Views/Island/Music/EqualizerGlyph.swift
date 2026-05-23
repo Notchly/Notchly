@@ -103,6 +103,10 @@ final class EqualizerGlyphNSView: NSView {
     override func layout() {
         super.layout()
 
+        layoutBars()
+    }
+
+    private func layoutBars() {
         let startX = (bounds.width - totalWidth) / 2
         let centerY = bounds.midY
 
@@ -217,7 +221,7 @@ final class EqualizerGlyphNSView: NSView {
     }
 
     private func startAnimating() {
-        layoutSubtreeIfNeeded()
+        layoutBars()
 
         for (index, layer) in barLayers.enumerated() {
             layer.removeAnimation(forKey: "equalizer")

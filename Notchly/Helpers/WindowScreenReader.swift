@@ -29,6 +29,7 @@ struct WindowScreenReader: NSViewRepresentable {
 
 final class ScreenAwareView: NSView {
     var onScreenChange: ((NSScreen?) -> Void)?
+    private var hasPendingScreenNotification = false
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
@@ -42,7 +43,14 @@ final class ScreenAwareView: NSView {
     }
 
     func notifyCurrentScreen() {
-        onScreenChange?(window?.screen)
+        guard !hasPendingScreenNotification else { return }
+        hasPendingScreenNotification = true
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.hasPendingScreenNotification = false
+            self.onScreenChange?(self.window?.screen)
+        }
     }
 
     private func subscribeToWindowChanges() {

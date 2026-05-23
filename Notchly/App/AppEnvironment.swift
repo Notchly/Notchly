@@ -7,16 +7,26 @@
 
 import Foundation
 import Combine
+import CoreGraphics
 import Darwin
+import IOKit
+import IOKit.graphics
 import notify
 import ObjectiveC.runtime
 import Sparkle
+
+@_silgen_name("CGDisplayIOServicePort")
+private func CGDisplayIOServicePort(_ display: CGDirectDisplayID) -> io_service_t
+
+private typealias DisplayServicesGetBrightnessFunction =
+    @convention(c) (CGDirectDisplayID, UnsafeMutablePointer<Float>) -> Int32
 
 @MainActor
 final class AppEnvironment {
     let musicManager = MusicManager()
     let settingsManager = SettingsManager()
     let focusManager = FocusManager()
+    let brightnessManager = BrightnessManager()
     let lockScreenOverlayModel = LockScreenOverlayModel()
 
     let updaterController = SPUStandardUpdaterController(
@@ -36,6 +46,157 @@ final class AppEnvironment {
     lazy var settingsWindow = SettingsWindow(
         settingsManager: settingsManager
     )
+}
+
+// MARK: - Brightness Manager
+
+@MainActor
+final class BrightnessManager: ObservableObject {
+    @Published private(set) var brightnessEventID = 0
+    @Published private(set) var brightnessLevel: Double = 0
+
+    private var pollingTask: Task<Void, Never>?
+    private var lastPublishedLevel: Double?
+    private var cachedDisplayIDs: [CGDirectDisplayID] = []
+    private var displayListRefreshTime: TimeInterval = 0
+    private let displayServicesGetBrightness = BrightnessManager.loadDisplayServicesGetBrightness()
+
+    func start() {
+        guard pollingTask == nil else { return }
+
+        let initialLevel = readBrightness() ?? 0
+        brightnessLevel = initialLevel
+        lastPublishedLevel = initialLevel
+
+        pollingTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+
+                if let nextLevel = self.readBrightness() {
+                    self.handleBrightnessLevel(nextLevel)
+                }
+
+                try? await Task.sleep(for: .milliseconds(220))
+            }
+        }
+    }
+
+    func stop() {
+        pollingTask?.cancel()
+        pollingTask = nil
+    }
+
+    private func handleBrightnessLevel(_ nextLevel: Double) {
+        guard let lastPublishedLevel else {
+            brightnessLevel = nextLevel
+            self.lastPublishedLevel = nextLevel
+            return
+        }
+
+        let delta = abs(nextLevel - lastPublishedLevel)
+        guard delta >= 0.005 else { return }
+
+        brightnessLevel = nextLevel
+        self.lastPublishedLevel = nextLevel
+
+        if delta >= 0.01 {
+            brightnessEventID += 1
+        }
+    }
+
+    private func readBrightness() -> Double? {
+        for displayID in activeDisplayIDs() {
+            if let brightness = readBrightness(for: displayID) {
+                return brightness
+            }
+        }
+
+        return nil
+    }
+
+    private func activeDisplayIDs() -> [CGDirectDisplayID] {
+        let now = Date.timeIntervalSinceReferenceDate
+        if !cachedDisplayIDs.isEmpty,
+           now - displayListRefreshTime < 5 {
+            return cachedDisplayIDs
+        }
+
+        var displayCount: UInt32 = 0
+        guard CGGetActiveDisplayList(0, nil, &displayCount) == .success,
+              displayCount > 0 else {
+            cachedDisplayIDs = [CGMainDisplayID()]
+            displayListRefreshTime = now
+            return cachedDisplayIDs
+        }
+
+        var displayIDs = [CGDirectDisplayID](repeating: 0, count: Int(displayCount))
+        guard CGGetActiveDisplayList(displayCount, &displayIDs, &displayCount) == .success else {
+            cachedDisplayIDs = [CGMainDisplayID()]
+            displayListRefreshTime = now
+            return cachedDisplayIDs
+        }
+
+        let validDisplayIDs = displayIDs
+            .prefix(Int(displayCount))
+            .filter { $0 != 0 }
+
+        cachedDisplayIDs = Array(validDisplayIDs)
+        displayListRefreshTime = now
+        return cachedDisplayIDs
+    }
+
+    private func readBrightness(for displayID: CGDirectDisplayID) -> Double? {
+        if let brightness = readDisplayServicesBrightness(for: displayID) {
+            return brightness
+        }
+
+        return readIOKitBrightness(for: displayID)
+    }
+
+    private func readDisplayServicesBrightness(for displayID: CGDirectDisplayID) -> Double? {
+        guard let displayServicesGetBrightness else { return nil }
+
+        var value: Float = 0
+        let result = displayServicesGetBrightness(displayID, &value)
+        guard result == 0 else { return nil }
+
+        return clampedBrightness(value)
+    }
+
+    private func readIOKitBrightness(for displayID: CGDirectDisplayID) -> Double? {
+        let service = CGDisplayIOServicePort(displayID)
+        guard service != 0 else { return nil }
+
+        var value: Float = 0
+        let result = IODisplayGetFloatParameter(
+            service,
+            0,
+            kIODisplayBrightnessKey as CFString,
+            &value
+        )
+
+        guard result == kIOReturnSuccess else { return nil }
+        return clampedBrightness(value)
+    }
+
+    private func clampedBrightness(_ value: Float) -> Double {
+        min(max(Double(value), 0), 1)
+    }
+
+    private static func loadDisplayServicesGetBrightness() -> DisplayServicesGetBrightnessFunction? {
+        guard let handle = dlopen(
+            "/System/Library/PrivateFrameworks/DisplayServices.framework/DisplayServices",
+            RTLD_LAZY
+        ) else {
+            return nil
+        }
+
+        guard let symbol = dlsym(handle, "DisplayServicesGetBrightness") else {
+            return nil
+        }
+
+        return unsafeBitCast(symbol, to: DisplayServicesGetBrightnessFunction.self)
+    }
 }
 
 // MARK: - Focus Manager
@@ -86,8 +247,6 @@ final class FocusManager: ObservableObject {
         installDNDStateServiceListener()
         installDistributedNotificationObservers()
         installDarwinNotificationObservers()
-
-        refreshFocusState(announceChanges: false)
     }
 
     func stop() {
@@ -207,11 +366,6 @@ final class FocusManager: ObservableObject {
     private func refreshFocusState(announceChanges: Bool) -> Bool {
         guard isRunning else { return false }
 
-        if let queriedState = queryDNDStateService() {
-            lastKnownQueriedState = queriedState
-            return setFocusState(queriedState, announceChanges: announceChanges)
-        }
-
         if let lastKnownQueriedState {
             return setFocusState(lastKnownQueriedState, announceChanges: announceChanges)
         }
@@ -293,11 +447,6 @@ final class FocusManager: ObservableObject {
         dndStateService = service
         dndStateListener = listener
         dndStateServiceClass = serviceClass
-
-        if let currentState = queryDNDStateService() {
-            lastKnownQueriedState = currentState
-            setFocusState(currentState, announceChanges: false)
-        }
     }
 
     private func removeDNDStateServiceListener() {
@@ -389,33 +538,6 @@ final class FocusManager: ObservableObject {
         return remove(service, selector, listener, error)
     }
 
-    private func queryDNDStateService() -> Bool? {
-        autoreleasepool {
-            guard let service = dndStateService,
-                  let serviceClass = dndStateServiceClass else {
-                return nil
-            }
-
-            let selector = NSSelectorFromString("queryCurrentStateWithError:")
-
-            guard let implementation = class_getMethodImplementation(serviceClass, selector) else {
-                return nil
-            }
-
-            typealias QueryFunction = @convention(c) (
-                AnyObject,
-                Selector,
-                AutoreleasingUnsafeMutablePointer<NSError?>?
-            ) -> AnyObject?
-
-            var error: NSError?
-            let query = unsafeBitCast(implementation, to: QueryFunction.self)
-
-            guard let state = query(service, selector, &error) else { return nil }
-
-            return DNDStateUpdateListener.isFocusActive(in: state)
-        }
-    }
 }
 
 private final class FocusDistributedNotificationRelay: NSObject {

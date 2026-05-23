@@ -15,6 +15,7 @@ struct LockScreenOverlayRootView: View {
     let batteryManager: BatteryManager
     let dynamicManager: DynamicManager
     let musicManager: MusicManager
+    let brightnessManager: BrightnessManager
     let screenSize: CGSize
 
     @State private var displayedState: LockScreenOverlayState = .locked
@@ -34,6 +35,7 @@ struct LockScreenOverlayRootView: View {
         batteryManager: BatteryManager,
         dynamicManager: DynamicManager,
         musicManager: MusicManager,
+        brightnessManager: BrightnessManager,
         screenSize: CGSize
     ) {
         self.model = model
@@ -42,6 +44,7 @@ struct LockScreenOverlayRootView: View {
         self.batteryManager = batteryManager
         self.dynamicManager = dynamicManager
         self.musicManager = musicManager
+        self.brightnessManager = brightnessManager
         self.screenSize = screenSize
 
         let initialState = model.state
@@ -51,7 +54,9 @@ struct LockScreenOverlayRootView: View {
     }
     
     private func updateClosedHeight(for screen: NSScreen?) {
-        resolvedClosedHeight = IslandHeightResolver.closedHeight(for: screen)
+        let nextHeight = IslandHeightResolver.closedHeight(for: screen)
+        guard resolvedClosedHeight != nextHeight else { return }
+        resolvedClosedHeight = nextHeight
     }
 
     private let unlockAnimationDuration: TimeInterval = 0.18
@@ -78,6 +83,7 @@ struct LockScreenOverlayRootView: View {
                 dynamicManager: dynamicManager,
                 musicManager: musicManager,
                 focusManager: focusManager,
+                brightnessManager: brightnessManager,
                 animationsEnabled: isRegularIslandVisible
             )
             .padding(.top, 0)

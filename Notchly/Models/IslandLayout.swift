@@ -13,23 +13,28 @@ struct IslandLayout {
     let showChargingPop: Bool
     let isMusicVolumeControlExpanded: Bool
     let closedHeight: CGFloat
+    let islandWidth: CGFloat
 
     let spacing: CGFloat = 10
 
+    var baseWidth: CGFloat {
+        min(max(islandWidth, 280), 360)
+    }
+
     var closedSize: CGSize {
-        CGSize(width: 318, height: closedHeight)
+        CGSize(width: baseWidth, height: closedHeight)
     }
 
     var openedSize: CGSize {
-        CGSize(width: 318, height: 132)
+        CGSize(width: baseWidth, height: 132)
     }
 
     var musicOpenedSize: CGSize {
-        CGSize(width: 318, height: isMusicVolumeControlExpanded ? 228 : 190)
+        CGSize(width: baseWidth, height: isMusicVolumeControlExpanded ? 228 : 190)
     }
 
     var musicPreviewSize: CGSize {
-        CGSize(width: 318, height: 68)
+        CGSize(width: baseWidth, height: 68)
     }
 
     var focusPreviewSize: CGSize {
@@ -40,8 +45,16 @@ struct IslandLayout {
         CGSize(width: closedSize.width * 0.5, height: closedHeight)
     }
 
+    var brightnessPreviewSize: CGSize {
+        closedSize
+    }
+
+    var brightnessCollapsedSize: CGSize {
+        CGSize(width: closedSize.width * 0.5, height: closedHeight)
+    }
+
     var chargingSize: CGSize {
-        CGSize(width: 280, height: closedHeight)
+        CGSize(width: max(280, baseWidth - 38), height: closedHeight)
     }
 
     var islandSize: CGSize {
@@ -58,6 +71,10 @@ struct IslandLayout {
             return focusCollapsedSize
         case .focusPreview:
             return focusPreviewSize
+        case .brightnessCollapse:
+            return brightnessCollapsedSize
+        case .brightnessPreview:
+            return brightnessPreviewSize
         }
     }
 
@@ -74,6 +91,10 @@ struct IslandLayout {
         case .focusCollapse:
             return 8
         case .focusPreview:
+            return 8
+        case .brightnessCollapse:
+            return 8
+        case .brightnessPreview:
             return 8
         }
     }
