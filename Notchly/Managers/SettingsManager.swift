@@ -9,12 +9,44 @@ import Foundation
 import Combine
 import ServiceManagement
 
+enum DisplayTarget: String, CaseIterable {
+    case main
+    case builtIn
+
+    var title: String {
+        switch self {
+        case .main:
+            return "Main display"
+        case .builtIn:
+            return "Built in display"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .main:
+            return "Follow the active main screen."
+        case .builtIn:
+            return "Prefer the MacBook display."
+        }
+    }
+
+    var symbolName: String {
+        switch self {
+        case .main:
+            return "display"
+        case .builtIn:
+            return "laptopcomputer"
+        }
+    }
+}
+
 @MainActor
 final class SettingsManager: ObservableObject {
     private enum Defaults {
         static let showBattery = true
         static let showMusic = true
-        static let showOnPrimaryDisplayOnly = true
+        static let displayTarget = DisplayTarget.builtIn
         static let lowBatteryThreshold = 20
         static let musicPreviewDuration = 2.0
         static let enableSpotifyAppleScriptControl = false
@@ -22,6 +54,8 @@ final class SettingsManager: ObservableObject {
         static let launchAtLogin = false
         static let enableLockSound = true
         static let showFocusAnimations = true
+        static let focusAnimationDuration = 2.0
+        static let hideFocusLabel = false
     }
 
     @Published var showBattery: Bool {
@@ -32,8 +66,8 @@ final class SettingsManager: ObservableObject {
         didSet { UserDefaults.standard.set(showMusic, forKey: "showMusic") }
     }
 
-    @Published var showOnPrimaryDisplayOnly: Bool {
-        didSet { UserDefaults.standard.set(showOnPrimaryDisplayOnly, forKey: "showOnPrimaryDisplayOnly") }
+    @Published var displayTarget: DisplayTarget {
+        didSet { UserDefaults.standard.set(displayTarget.rawValue, forKey: "displayTarget") }
     }
 
     @Published var lowBatteryThreshold: Int {
@@ -67,10 +101,18 @@ final class SettingsManager: ObservableObject {
         didSet { UserDefaults.standard.set(showFocusAnimations, forKey: "showFocusAnimations") }
     }
 
+    @Published var focusAnimationDuration: Double {
+        didSet { UserDefaults.standard.set(focusAnimationDuration, forKey: "focusAnimationDuration") }
+    }
+
+    @Published var hideFocusLabel: Bool {
+        didSet { UserDefaults.standard.set(hideFocusLabel, forKey: "hideFocusLabel") }
+    }
+
     init() {
         self.showBattery = UserDefaults.standard.object(forKey: "showBattery") as? Bool ?? Defaults.showBattery
         self.showMusic = UserDefaults.standard.object(forKey: "showMusic") as? Bool ?? Defaults.showMusic
-        self.showOnPrimaryDisplayOnly = UserDefaults.standard.object(forKey: "showOnPrimaryDisplayOnly") as? Bool ?? Defaults.showOnPrimaryDisplayOnly
+        self.displayTarget = Self.loadDisplayTarget()
         self.lowBatteryThreshold = UserDefaults.standard.object(forKey: "lowBatteryThreshold") as? Int ?? Defaults.lowBatteryThreshold
         self.musicPreviewDuration = UserDefaults.standard.object(forKey: "musicPreviewDuration") as? Double ?? Defaults.musicPreviewDuration
         self.enableSpotifyAppleScriptControl = UserDefaults.standard.object(forKey: "enableSpotifyAppleScriptControl") as? Bool ?? Defaults.enableSpotifyAppleScriptControl
@@ -81,6 +123,8 @@ final class SettingsManager: ObservableObject {
         self.launchAtLogin = savedLaunchAtLogin ?? systemLaunchAtLogin
         self.enableLockSound = UserDefaults.standard.object(forKey: "enableLockSound") as? Bool ?? Defaults.enableLockSound
         self.showFocusAnimations = UserDefaults.standard.object(forKey: "showFocusAnimations") as? Bool ?? Defaults.showFocusAnimations
+        self.focusAnimationDuration = UserDefaults.standard.object(forKey: "focusAnimationDuration") as? Double ?? Defaults.focusAnimationDuration
+        self.hideFocusLabel = UserDefaults.standard.object(forKey: "hideFocusLabel") as? Bool ?? Defaults.hideFocusLabel
     }
 
     func refreshLaunchAtLoginStatus() {
@@ -88,10 +132,15 @@ final class SettingsManager: ObservableObject {
     }
 
     func resetGeneralSettings() {
-        showOnPrimaryDisplayOnly = Defaults.showOnPrimaryDisplayOnly
+        displayTarget = Defaults.displayTarget
         launchAtLogin = Defaults.launchAtLogin
         enableLockSound = Defaults.enableLockSound
+    }
+
+    func resetFocusSettings() {
         showFocusAnimations = Defaults.showFocusAnimations
+        focusAnimationDuration = Defaults.focusAnimationDuration
+        hideFocusLabel = Defaults.hideFocusLabel
     }
 
     func resetBatterySettings() {
@@ -119,5 +168,18 @@ final class SettingsManager: ObservableObject {
                 launchAtLogin = actual
             }
         }
+    }
+
+    private static func loadDisplayTarget() -> DisplayTarget {
+        if let rawValue = UserDefaults.standard.string(forKey: "displayTarget"),
+           let displayTarget = DisplayTarget(rawValue: rawValue) {
+            return displayTarget
+        }
+
+        if let legacyPrimaryOnly = UserDefaults.standard.object(forKey: "showOnPrimaryDisplayOnly") as? Bool {
+            return legacyPrimaryOnly ? .builtIn : .main
+        }
+
+        return Defaults.displayTarget
     }
 }

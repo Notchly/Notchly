@@ -62,7 +62,7 @@ final class SkyLightOverlayController {
     private func installSettingsObserver() {
         guard settingsCancellable == nil else { return }
 
-        settingsCancellable = environment.settingsManager.$showOnPrimaryDisplayOnly
+        settingsCancellable = environment.settingsManager.$displayTarget
             .removeDuplicates()
             .dropFirst()
             .sink { [weak self] _ in
@@ -115,16 +115,17 @@ final class SkyLightOverlayController {
 
         guard !screens.isEmpty else { return nil }
 
-        if environment.settingsManager.showOnPrimaryDisplayOnly {
-            return primaryNotchedScreen(in: screens)
+        switch environment.settingsManager.displayTarget {
+        case .main:
+            return NSScreen.main
+                ?? screens.first
+
+        case .builtIn:
+            return builtInScreen(in: screens)
+                ?? primaryNotchedScreen(in: screens)
                 ?? NSScreen.main
                 ?? screens.first
         }
-
-        return screenContainingMouse(in: screens)
-            ?? NSScreen.main
-            ?? primaryNotchedScreen(in: screens)
-            ?? screens.first
     }
 
     private func primaryNotchedScreen(in screens: [NSScreen]) -> NSScreen? {
@@ -135,19 +136,18 @@ final class SkyLightOverlayController {
             .flatMap { $0.safeAreaInsets.top > 0 ? $0 : nil }
     }
 
-    private func screenContainingMouse(in screens: [NSScreen]) -> NSScreen? {
-        let mouseLocation = NSEvent.mouseLocation
-
-        return screens.first { screen in
-            screen.frame.contains(mouseLocation)
-        }
-    }
-
     private func displayID(for screen: NSScreen) -> CGDirectDisplayID? {
         guard let number = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber else {
             return nil
         }
 
         return CGDirectDisplayID(number.uint32Value)
+    }
+
+    private func builtInScreen(in screens: [NSScreen]) -> NSScreen? {
+        screens.first { screen in
+            guard let displayID = displayID(for: screen) else { return false }
+            return CGDisplayIsBuiltin(displayID) != 0
+        }
     }
 }

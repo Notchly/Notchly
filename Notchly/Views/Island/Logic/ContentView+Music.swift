@@ -55,6 +55,7 @@ extension ContentView {
             if status == .focusPreview || (status == .focusCollapse && !focusCollapseShowsMusic) {
                 FocusMusicStatusView(
                     isActive: focusStatusIsActive,
+                    hidesLabel: settingsManager.hideFocusLabel,
                     size: layout.focusPreviewSize
                 )
                 .transition(.opacity.animation(.easeInOut(duration: 0.18)))
@@ -267,6 +268,7 @@ extension ContentView {
 
 private struct FocusMusicStatusView: View {
     let isActive: Bool
+    let hidesLabel: Bool
     let size: CGSize
 
     private var accentColor: Color {
@@ -287,11 +289,13 @@ private struct FocusMusicStatusView: View {
 
             Spacer()
 
-            Text(statusText)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.9))
-                .contentTransition(.numericText())
-                .lineLimit(1)
+            if !hidesLabel {
+                Text(statusText)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .contentTransition(.numericText())
+                    .lineLimit(1)
+            }
         }
         .padding(.horizontal, 12)
         .frame(width: size.width, height: size.height)

@@ -26,6 +26,29 @@ struct LockScreenOverlayRootView: View {
     @State private var lastHandledState: LockScreenOverlayState?
     @State private var currentScreen: NSScreen?
     @State private var resolvedClosedHeight: CGFloat = IslandHeightResolver.fallbackHeight
+
+    init(
+        model: LockScreenOverlayModel,
+        settingsManager: SettingsManager,
+        focusManager: FocusManager,
+        batteryManager: BatteryManager,
+        dynamicManager: DynamicManager,
+        musicManager: MusicManager,
+        screenSize: CGSize
+    ) {
+        self.model = model
+        self.settingsManager = settingsManager
+        self.focusManager = focusManager
+        self.batteryManager = batteryManager
+        self.dynamicManager = dynamicManager
+        self.musicManager = musicManager
+        self.screenSize = screenSize
+
+        let initialState = model.state
+        _displayedState = State(initialValue: initialState)
+        _showLockScreenPlayer = State(initialValue: initialState == .locked)
+        _lastHandledState = State(initialValue: initialState)
+    }
     
     private func updateClosedHeight(for screen: NSScreen?) {
         resolvedClosedHeight = IslandHeightResolver.closedHeight(for: screen)

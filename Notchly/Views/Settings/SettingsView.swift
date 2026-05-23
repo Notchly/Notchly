@@ -33,7 +33,7 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 18) {
                     sidebarGroup(
                         title: "Application",
-                        sections: [.about, .general]
+                        sections: [.about, .general, .focus]
                     )
 
                     sidebarGroup(
@@ -218,6 +218,9 @@ struct SettingsView: View {
         case .general:
             GeneralSettingsView(settingsManager: settingsManager)
 
+        case .focus:
+            FocusSettingsView(settingsManager: settingsManager)
+
         case .battery:
             BatterySettingsView(settingsManager: settingsManager)
 
@@ -264,6 +267,8 @@ struct SettingsView: View {
                 break
             case .general:
                 settingsManager.resetGeneralSettings()
+            case .focus:
+                settingsManager.resetFocusSettings()
             case .battery:
                 settingsManager.resetBatterySettings()
             case .music:

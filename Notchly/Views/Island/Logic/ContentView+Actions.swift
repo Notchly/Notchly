@@ -191,7 +191,7 @@ extension ContentView {
         focusStatusTask?.cancel()
 
         focusStatusTask = Task {
-            try? await Task.sleep(for: .seconds(2))
+            try? await Task.sleep(for: .seconds(settingsManager.focusAnimationDuration))
             guard !Task.isCancelled else { return }
 
             await MainActor.run {
