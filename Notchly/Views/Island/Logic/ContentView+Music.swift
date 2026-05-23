@@ -338,7 +338,7 @@ private struct BrightnessStatusView: View {
         HStack(spacing: 10) {
             Image(systemName: brightnessSymbolName)
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Color(red: 1.0, green: 0.86, blue: 0.38))
+                .foregroundStyle(.white.opacity(0.9))
                 .frame(width: 24, height: 24)
 
             Spacer(minLength: 0)
@@ -351,20 +351,11 @@ private struct BrightnessStatusView: View {
 
                         ZStack(alignment: .leading) {
                             Capsule()
-                                .fill(Color.white.opacity(0.18))
+                                .fill(Color.white.opacity(0.16))
                                 .frame(height: 5)
 
                             Capsule()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [
-                                            Color.white.opacity(0.95),
-                                            Color(red: 1.0, green: 0.82, blue: 0.32)
-                                        ],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
+                                .fill(Color.white.opacity(0.88))
                                 .frame(width: fillWidth, height: 5)
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
