@@ -34,6 +34,12 @@ struct ContentView: View {
     @State var brightnessReturnStatus: IslandStatus = .closed
     @State var brightnessCollapseShowsMusic = true
     @State var pendingBrightnessEventTimestamp: TimeInterval?
+    @State var lastBrightnessStatusEventTime: TimeInterval = 0
+    @State var volumeStatusTask: Task<Void, Never>?
+    @State var volumeReturnStatus: IslandStatus = .closed
+    @State var volumeCollapseShowsMusic = true
+    @State var pendingVolumeEventTimestamp: TimeInterval?
+    @State var lastVolumeStatusEventTime: TimeInterval = 0
     @State var musicScrollGestureState: Int = 0
     @State var isPointerInsideIsland = false
     @State var playPauseBounce = false
@@ -73,18 +79,22 @@ struct ContentView: View {
             handleMusicAutoExpand(isPlaying: musicManager.isPlaying)
             playPendingFocusEventIfReady()
             playPendingBrightnessEventIfReady()
+            playPendingVolumeEventIfReady()
         }
         .onChange(of: dynamicManager.currentModule) { _, _ in
             playPendingFocusEventIfReady()
             playPendingBrightnessEventIfReady()
+            playPendingVolumeEventIfReady()
         }
         .onChange(of: musicManager.isPlaying) { _, _ in
             playPendingFocusEventIfReady()
             playPendingBrightnessEventIfReady()
+            playPendingVolumeEventIfReady()
         }
         .onChange(of: animationsEnabled) { _, _ in
             playPendingFocusEventIfReady()
             playPendingBrightnessEventIfReady()
+            playPendingVolumeEventIfReady()
         }
         .onChange(of: status) { _, newValue in
             guard newValue != .opened else { return }
@@ -98,6 +108,10 @@ struct ContentView: View {
             guard eventID > 0 else { return }
             handleBrightnessEvent()
         }
+        .onChange(of: musicManager.outputVolumeEventID) { _, eventID in
+            guard eventID > 0 else { return }
+            handleVolumeEvent()
+        }
         .onChange(of: settingsManager.showFocusAnimations) { _, isEnabled in
             guard !isEnabled else { return }
             hideFocusStatusPreview()
@@ -106,10 +120,13 @@ struct ContentView: View {
             guard !isEnabled else { return }
             hideBrightnessStatusPreview()
         }
+        .onChange(of: settingsManager.showSoundStatus) { _, isEnabled in
+            guard !isEnabled else { return }
+            hideVolumeStatusPreview()
+        }
         .animation(.interactiveSpring(duration: 0.32, extraBounce: 0.03), value: isHovered)
         .animation(animation, value: status)
         .animation(.easeInOut(duration: 0.18), value: focusStatusIsActive)
-        .animation(.easeInOut(duration: 0.18), value: brightnessManager.brightnessLevel)
         .animation(animation, value: showMusicVolumeControl)
         .animation(.easeInOut(duration: 0.22), value: batteryManager.batteryLevel)
         .preferredColorScheme(.dark)

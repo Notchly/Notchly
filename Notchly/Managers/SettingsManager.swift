@@ -61,6 +61,10 @@ final class SettingsManager: ObservableObject {
         static let showBrightnessLine = true
         static let brightnessLineWidth = 36.0
         static let showBrightnessPercent = true
+        static let showSoundStatus = true
+        static let showSoundLine = true
+        static let soundLineWidth = 36.0
+        static let showSoundPercent = true
     }
 
     @Published var showBattery: Bool {
@@ -134,6 +138,22 @@ final class SettingsManager: ObservableObject {
         didSet { UserDefaults.standard.set(showBrightnessPercent, forKey: "showBrightnessPercent") }
     }
 
+    @Published var showSoundStatus: Bool {
+        didSet { UserDefaults.standard.set(showSoundStatus, forKey: "showSoundStatus") }
+    }
+
+    @Published var showSoundLine: Bool {
+        didSet { UserDefaults.standard.set(showSoundLine, forKey: "showSoundLine") }
+    }
+
+    @Published var soundLineWidth: Double {
+        didSet { UserDefaults.standard.set(soundLineWidth, forKey: "soundLineWidth") }
+    }
+
+    @Published var showSoundPercent: Bool {
+        didSet { UserDefaults.standard.set(showSoundPercent, forKey: "showSoundPercent") }
+    }
+
     init() {
         self.showBattery = UserDefaults.standard.object(forKey: "showBattery") as? Bool ?? Defaults.showBattery
         self.showMusic = UserDefaults.standard.object(forKey: "showMusic") as? Bool ?? Defaults.showMusic
@@ -155,6 +175,10 @@ final class SettingsManager: ObservableObject {
         self.showBrightnessLine = UserDefaults.standard.object(forKey: "showBrightnessLine") as? Bool ?? Defaults.showBrightnessLine
         self.brightnessLineWidth = UserDefaults.standard.object(forKey: "brightnessLineWidth") as? Double ?? Defaults.brightnessLineWidth
         self.showBrightnessPercent = UserDefaults.standard.object(forKey: "showBrightnessPercent") as? Bool ?? Defaults.showBrightnessPercent
+        self.showSoundStatus = UserDefaults.standard.object(forKey: "showSoundStatus") as? Bool ?? Defaults.showSoundStatus
+        self.showSoundLine = UserDefaults.standard.object(forKey: "showSoundLine") as? Bool ?? Defaults.showSoundLine
+        self.soundLineWidth = UserDefaults.standard.object(forKey: "soundLineWidth") as? Double ?? Defaults.soundLineWidth
+        self.showSoundPercent = UserDefaults.standard.object(forKey: "showSoundPercent") as? Bool ?? Defaults.showSoundPercent
     }
 
     func refreshLaunchAtLoginStatus() {
@@ -184,6 +208,13 @@ final class SettingsManager: ObservableObject {
         showBrightnessLine = Defaults.showBrightnessLine
         brightnessLineWidth = Defaults.brightnessLineWidth
         showBrightnessPercent = Defaults.showBrightnessPercent
+    }
+
+    func resetSoundSettings() {
+        showSoundStatus = Defaults.showSoundStatus
+        showSoundLine = Defaults.showSoundLine
+        soundLineWidth = Defaults.soundLineWidth
+        showSoundPercent = Defaults.showSoundPercent
     }
 
     func resetMusicSettings() {

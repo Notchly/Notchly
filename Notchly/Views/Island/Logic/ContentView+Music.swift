@@ -21,7 +21,8 @@ extension ContentView {
             if status == .closed ||
                 status == .popping ||
                 (status == .focusCollapse && focusCollapseShowsMusic) ||
-                (status == .brightnessCollapse && brightnessCollapseShowsMusic) {
+                (status == .brightnessCollapse && brightnessCollapseShowsMusic) ||
+                (status == .volumeCollapse && volumeCollapseShowsMusic) {
                 CompactMusicView(
                     artwork: musicManager.artworkImage,
                     waveformColor: musicManager.waveformColor,
@@ -52,8 +53,6 @@ extension ContentView {
                 )
                 .zIndex(2)
             }
-            
-           
 
             if status == .focusPreview || (status == .focusCollapse && !focusCollapseShowsMusic) {
                 FocusMusicStatusView(
@@ -72,6 +71,19 @@ extension ContentView {
                     showsLine: settingsManager.showBrightnessLine,
                     showsPercent: settingsManager.showBrightnessPercent,
                     size: layout.brightnessPreviewSize
+                )
+                .transition(.opacity.animation(.easeInOut(duration: 0.18)))
+                .zIndex(4)
+            }
+
+            if status == .volumePreview || (status == .volumeCollapse && !volumeCollapseShowsMusic) {
+                VolumeStatusView(
+                    volume: musicManager.outputVolume,
+                    isMuted: musicManager.isOutputMuted,
+                    lineWidth: CGFloat(settingsManager.soundLineWidth),
+                    showsLine: settingsManager.showSoundLine,
+                    showsPercent: settingsManager.showSoundPercent,
+                    size: layout.volumePreviewSize
                 )
                 .transition(.opacity.animation(.easeInOut(duration: 0.18)))
                 .zIndex(4)
@@ -177,6 +189,8 @@ extension ContentView {
         guard status != .focusCollapse else { return }
         guard status != .brightnessPreview else { return }
         guard status != .brightnessCollapse else { return }
+        guard status != .volumePreview else { return }
+        guard status != .volumeCollapse else { return }
 
         let horizontalTriggerThreshold: CGFloat = 14
         let verticalTriggerThreshold: CGFloat = 8
@@ -310,7 +324,6 @@ private struct FocusMusicStatusView: View {
                 Text(statusText)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.9))
-                    .contentTransition(.numericText())
                     .lineLimit(1)
             }
         }
@@ -357,6 +370,7 @@ private struct BrightnessStatusView: View {
                             Capsule()
                                 .fill(Color.white.opacity(0.88))
                                 .frame(width: fillWidth, height: 5)
+                                .animation(.easeOut(duration: 0.12), value: clampedBrightness)
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
@@ -367,7 +381,6 @@ private struct BrightnessStatusView: View {
                     Text("\(percentage)")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.9))
-                        .contentTransition(.numericText())
                         .monospacedDigit()
                         .frame(width: 30, alignment: .trailing)
                 }
@@ -385,6 +398,79 @@ private struct BrightnessStatusView: View {
             return "sun.max"
         default:
             return "sun.max.fill"
+        }
+    }
+}
+
+private struct VolumeStatusView: View {
+    let volume: Double
+    let isMuted: Bool
+    let lineWidth: CGFloat
+    let showsLine: Bool
+    let showsPercent: Bool
+    let size: CGSize
+
+    private var clampedVolume: Double {
+        isMuted ? 0 : min(max(volume, 0), 1)
+    }
+
+    private var percentage: Int {
+        Int((clampedVolume * 100).rounded())
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: volumeSymbolName)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.9))
+                .frame(width: 24, height: 24)
+
+            Spacer(minLength: 0)
+
+            HStack(spacing: 4) {
+                if showsLine {
+                    GeometryReader { geo in
+                        let width = max(geo.size.width, 1)
+                        let fillWidth = width * clampedVolume
+
+                        ZStack(alignment: .leading) {
+                            Capsule()
+                                .fill(Color.white.opacity(0.16))
+                                .frame(height: 5)
+
+                            Capsule()
+                                .fill(Color.white.opacity(0.88))
+                                .frame(width: fillWidth, height: 5)
+                                .animation(.easeOut(duration: 0.12), value: clampedVolume)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                    .frame(width: lineWidth, height: 20)
+                }
+
+                if showsPercent {
+                    Text("\(percentage)")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.9))
+                        .monospacedDigit()
+                        .frame(width: 30, alignment: .trailing)
+                }
+            }
+        }
+        .padding(.horizontal, 12)
+        .frame(width: size.width, height: size.height)
+    }
+
+    private var volumeSymbolName: String {
+        switch percentage {
+        case 0:
+            return "speaker.slash.fill"
+        case 1...33:
+            return "speaker.wave.1.fill"
+        case 34...66:
+            return "speaker.wave.2.fill"
+        default:
+            return "speaker.wave.3.fill"
         }
     }
 }

@@ -53,6 +53,14 @@ struct IslandLayout {
         CGSize(width: closedSize.width * 0.5, height: closedHeight)
     }
 
+    var volumePreviewSize: CGSize {
+        closedSize
+    }
+
+    var volumeCollapsedSize: CGSize {
+        CGSize(width: closedSize.width * 0.5, height: closedHeight)
+    }
+
     var chargingSize: CGSize {
         CGSize(width: max(280, baseWidth - 38), height: closedHeight)
     }
@@ -75,6 +83,10 @@ struct IslandLayout {
             return brightnessCollapsedSize
         case .brightnessPreview:
             return brightnessPreviewSize
+        case .volumeCollapse:
+            return volumeCollapsedSize
+        case .volumePreview:
+            return volumePreviewSize
         }
     }
 
@@ -95,6 +107,10 @@ struct IslandLayout {
         case .brightnessCollapse:
             return 8
         case .brightnessPreview:
+            return 8
+        case .volumeCollapse:
+            return 8
+        case .volumePreview:
             return 8
         }
     }

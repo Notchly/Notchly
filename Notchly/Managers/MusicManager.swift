@@ -34,6 +34,7 @@ final class MusicManager: ObservableObject {
     @MainActor @Published private(set) var waveformColor: Color = .white
     @MainActor @Published private(set) var outputVolume: Double = 0.5
     @MainActor @Published private(set) var isOutputMuted: Bool = false
+    @MainActor @Published private(set) var outputVolumeEventID = 0
     @MainActor @Published private(set) var isShuffleEnabled: Bool = false
 
     @MainActor var hasNowPlayingContent: Bool {
@@ -59,7 +60,7 @@ final class MusicManager: ObservableObject {
     private var pendingShuffleStateUntil: Date?
 
     private let progressTickInterval: TimeInterval = 1.0
-    private let volumePollInterval: TimeInterval = 0.75
+    private let volumePollInterval: TimeInterval = 0.22
 
     init() {
         bindMediaController()
@@ -74,7 +75,7 @@ final class MusicManager: ObservableObject {
         }
 
         Task { @MainActor in
-            refreshOutputVolume()
+            refreshOutputVolume(emitsEvent: false)
             startVolumePolling()
         }
     }
@@ -400,6 +401,10 @@ final class MusicManager: ObservableObject {
 
         guard SystemOutputVolume.setVolume(clamped) else {
             outputVolume = clamped
+            isOutputMuted = clamped <= 0.01
+            if clamped > 0.01 {
+                lastAudibleOutputVolume = clamped
+            }
             return
         }
 
@@ -408,7 +413,7 @@ final class MusicManager: ObservableObject {
             _ = SystemOutputVolume.setMuted(false)
         }
 
-        refreshOutputVolume()
+        refreshOutputVolume(emitsEvent: false)
     }
 
     @MainActor
@@ -420,7 +425,7 @@ final class MusicManager: ObservableObject {
             setOutputVolume(0)
         }
 
-        refreshOutputVolume()
+        refreshOutputVolume(emitsEvent: false)
     }
 
     @MainActor
@@ -472,7 +477,7 @@ final class MusicManager: ObservableObject {
 
         volumePollTimer = Timer.scheduledTimer(withTimeInterval: volumePollInterval, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
-                self?.refreshOutputVolume()
+                self?.refreshOutputVolume(emitsEvent: true)
             }
         }
 
@@ -482,9 +487,13 @@ final class MusicManager: ObservableObject {
     }
 
     @MainActor
-    private func refreshOutputVolume() {
+    private func refreshOutputVolume(emitsEvent: Bool) {
+        let previousDisplayVolume = isOutputMuted ? 0 : outputVolume
+        let previousMuted = isOutputMuted
+        var nextVolume = outputVolume
+
         if let currentVolume = SystemOutputVolume.currentVolume() {
-            outputVolume = currentVolume
+            nextVolume = currentVolume
 
             if currentVolume > 0.01 {
                 lastAudibleOutputVolume = currentVolume
@@ -492,7 +501,23 @@ final class MusicManager: ObservableObject {
         }
 
         let muted = SystemOutputVolume.isMuted() ?? false
-        isOutputMuted = muted || outputVolume <= 0.01
+        let nextMuted = muted || nextVolume <= 0.01
+
+        let currentDisplayVolume = nextMuted ? 0 : nextVolume
+        let volumeChanged = abs(currentDisplayVolume - previousDisplayVolume) >= 0.01
+        let muteChanged = previousMuted != nextMuted
+
+        if abs(outputVolume - nextVolume) >= 0.001 {
+            outputVolume = nextVolume
+        }
+
+        if isOutputMuted != nextMuted {
+            isOutputMuted = nextMuted
+        }
+
+        if emitsEvent && (volumeChanged || muteChanged) {
+            outputVolumeEventID += 1
+        }
     }
 
     @MainActor

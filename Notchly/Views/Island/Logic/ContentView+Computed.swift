@@ -22,7 +22,12 @@ extension ContentView {
 
     var activeModuleView: some View {
         Group {
-            if status == .focusCollapse || status == .focusPreview || status == .brightnessCollapse || status == .brightnessPreview {
+            if status == .focusCollapse ||
+                status == .focusPreview ||
+                status == .brightnessCollapse ||
+                status == .brightnessPreview ||
+                status == .volumeCollapse ||
+                status == .volumePreview {
                 musicContainer
             } else {
                 switch dynamicManager.currentModule {
@@ -60,6 +65,10 @@ extension ContentView {
         case .brightnessCollapse:
             return 1.0
         case .brightnessPreview:
+            return 1.01
+        case .volumeCollapse:
+            return 1.0
+        case .volumePreview:
             return 1.01
         }
     }

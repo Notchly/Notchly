@@ -11,6 +11,7 @@ enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
     case general = "General"
     case focus = "Focus"
     case brightness = "Brightness"
+    case sound = "Sound"
     case music = "Now Playing"
     case battery = "Battery"
     case about = "About"
@@ -25,6 +26,8 @@ enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
             return "moon.fill"
         case .brightness:
             return "sun.max.fill"
+        case .sound:
+            return "speaker.wave.2.fill"
         case .music:
             return "music.note"
         case .battery:
@@ -42,6 +45,8 @@ enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
             return .indigo
         case .brightness:
             return .yellow
+        case .sound:
+            return .orange
         case .music:
             return .red
         case .battery:
@@ -59,6 +64,8 @@ enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
             return "Customize Focus status animations."
         case .brightness:
             return "Customize brightness status and indicator layout."
+        case .sound:
+            return "Customize sound status and indicator layout."
         case .music:
             return "Customize now playing controls and previews."
         case .battery:

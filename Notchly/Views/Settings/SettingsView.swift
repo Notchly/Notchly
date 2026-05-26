@@ -35,7 +35,7 @@ struct SettingsView: View {
 
                     sidebarGroup(
                         title: "Notifications",
-                        sections: [.focus, .brightness, .battery]
+                        sections: [.focus, .brightness, .sound, .battery]
                     )
 
                     sidebarGroup(
@@ -226,6 +226,9 @@ struct SettingsView: View {
         case .brightness:
             BrightnessSettingsView(settingsManager: settingsManager)
 
+        case .sound:
+            SoundSettingsView(settingsManager: settingsManager)
+
         case .battery:
             BatterySettingsView(settingsManager: settingsManager)
 
@@ -276,6 +279,8 @@ struct SettingsView: View {
                 settingsManager.resetFocusSettings()
             case .brightness:
                 settingsManager.resetBrightnessSettings()
+            case .sound:
+                settingsManager.resetSoundSettings()
             case .battery:
                 settingsManager.resetBatterySettings()
             case .music:
