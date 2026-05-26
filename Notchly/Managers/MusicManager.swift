@@ -48,12 +48,14 @@ final class MusicManager: ObservableObject {
     nonisolated private let mediaController = MediaController()
     private var progressTask: Task<Void, Never>?
     private var volumePollTimer: Timer?
+    private var appTerminationObserver: NSObjectProtocol?
 
     private var basePlaybackPosition: Double = 0
     private var baseSyncDate: Date?
     private var currentPlaybackRate: Double = 0
     private var isPreviewSeeking = false
     private var currentTrackIdentity: String = ""
+    private var currentPlayerBundleIdentifier: String = ""
     private var lastAudibleOutputVolume: Double = 0.5
     private var ignoreTransientZeroProgressUntil: Date?
     private var pendingShuffleState: Bool?
@@ -64,6 +66,7 @@ final class MusicManager: ObservableObject {
 
     init() {
         bindMediaController()
+        observePlayerTermination()
 
         let mediaController = mediaController
         Task.detached(priority: .utility) {
@@ -85,6 +88,9 @@ final class MusicManager: ObservableObject {
         progressTask = nil
         volumePollTimer?.invalidate()
         volumePollTimer = nil
+        if let appTerminationObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(appTerminationObserver)
+        }
         mediaController.stopListening()
     }
 
@@ -184,6 +190,7 @@ final class MusicManager: ObservableObject {
         let elapsedMs = shouldPreservePlaybackProgress ? estimatedPlaybackPositionMs() : (reportedElapsedMs ?? 0)
 
         currentTrackIdentity = newTrackIdentity
+        currentPlayerBundleIdentifier = bundleIdentifier
 
         trackTitle = newTrackTitle
         artistName = newArtistName
@@ -212,6 +219,31 @@ final class MusicManager: ObservableObject {
         }
 
         syncProgressTimerState()
+    }
+
+    private func observePlayerTermination() {
+        appTerminationObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didTerminateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let terminatedApp = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
+                  let bundleIdentifier = terminatedApp.bundleIdentifier else {
+                return
+            }
+
+            Task { @MainActor [weak self] in
+                self?.handlePlayerTermination(bundleIdentifier: bundleIdentifier)
+            }
+        }
+    }
+
+    @MainActor
+    private func handlePlayerTermination(bundleIdentifier: String) {
+        guard !currentPlayerBundleIdentifier.isEmpty else { return }
+        guard bundleIdentifier == currentPlayerBundleIdentifier else { return }
+
+        clearPlaybackState()
     }
 
     @MainActor
@@ -538,6 +570,7 @@ final class MusicManager: ObservableObject {
         currentPlaybackRate = 0
         isPreviewSeeking = false
         currentTrackIdentity = ""
+        currentPlayerBundleIdentifier = ""
         isShuffleEnabled = false
         ignoreTransientZeroProgressUntil = nil
         pendingShuffleState = nil
