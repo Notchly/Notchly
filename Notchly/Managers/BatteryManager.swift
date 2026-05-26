@@ -33,7 +33,7 @@ final class BatteryManager: ObservableObject {
     func startMonitoring() {
         timer?.invalidate()
 
-        timer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: 5.0, repeats: true) { [weak self] _ in
             guard let self else { return }
 
             guard !self.shouldPauseBatteryUpdates else {
@@ -42,6 +42,9 @@ final class BatteryManager: ObservableObject {
 
             self.updateBatteryInfo()
         }
+
+        self.timer = timer
+        RunLoop.main.add(timer, forMode: .common)
     }
 
     private var shouldPauseBatteryUpdates: Bool {
@@ -53,7 +56,8 @@ final class BatteryManager: ObservableObject {
               let sources = IOPSCopyPowerSourcesList(snapshot)?.takeRetainedValue() as? [CFTypeRef],
               let source = sources.first,
               let description = IOPSGetPowerSourceDescription(snapshot, source)?.takeUnretainedValue() as? [String: Any] else {
-            DispatchQueue.main.async {
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
                 self.isBatteryAvailable = false
                 self.powerSource = "Unknown"
             }
@@ -66,7 +70,8 @@ final class BatteryManager: ObservableObject {
         let powerSourceState = description[kIOPSPowerSourceStateKey as String] as? String ?? ""
         let percent = max > 0 ? Int((Double(current) / Double(max)) * 100.0) : 0
 
-        DispatchQueue.main.async {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
             self.batteryLevel = percent
             self.isCharging = charging || powerSourceState == kIOPSACPowerValue
             self.isBatteryAvailable = true

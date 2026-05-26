@@ -16,6 +16,8 @@ struct LockScreenMusicPlayerView: View {
     @State private var previousButtonBounce = false
     @State private var nextButtonBounce = false
     @State private var artworkSlideDirection: CGFloat = 1
+    @State private var playPauseBounceTask: Task<Void, Never>?
+    @State private var skipBounceTask: Task<Void, Never>?
 
     private let artworkSize: CGFloat = 52
     private let artworkCornerRadius: CGFloat = 6.5
@@ -142,6 +144,12 @@ struct LockScreenMusicPlayerView: View {
             playerBackground
         }
         .shadow(color: .black.opacity(0.16), radius: 24, y: 13)
+        .onDisappear {
+            playPauseBounceTask?.cancel()
+            playPauseBounceTask = nil
+            skipBounceTask?.cancel()
+            skipBounceTask = nil
+        }
     }
 
     private var playerBackground: some View {
@@ -272,11 +280,15 @@ struct LockScreenMusicPlayerView: View {
     }
 
     private func togglePlay() {
+        playPauseBounceTask?.cancel()
         playPauseBounce = true
         musicManager.togglePlay()
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+        playPauseBounceTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(0.18))
+            guard !Task.isCancelled else { return }
             playPauseBounce = false
+            playPauseBounceTask = nil
         }
     }
 
@@ -291,6 +303,7 @@ struct LockScreenMusicPlayerView: View {
     }
 
     private func animateSkip(direction: CGFloat) {
+        skipBounceTask?.cancel()
         artworkSlideDirection = direction
 
         withAnimation(.interactiveSpring(duration: 0.2, extraBounce: 0.18)) {
@@ -301,7 +314,10 @@ struct LockScreenMusicPlayerView: View {
             }
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+        skipBounceTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(0.18))
+            guard !Task.isCancelled else { return }
+
             withAnimation(.interactiveSpring(duration: 0.2, extraBounce: 0.08)) {
                 if direction < 0 {
                     previousButtonBounce = false
@@ -309,6 +325,8 @@ struct LockScreenMusicPlayerView: View {
                     nextButtonBounce = false
                 }
             }
+
+            skipBounceTask = nil
         }
     }
 

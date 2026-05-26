@@ -20,6 +20,7 @@ struct MarqueeText: View {
     @State private var textWidth: CGFloat = 0
     @State private var containerWidth: CGFloat = 0
     @State private var offsetX: CGFloat = 0
+    @State private var animationTask: Task<Void, Never>?
 
     init(
         text: String,
@@ -86,9 +87,16 @@ struct MarqueeText: View {
             .frame(width: geo.size.width, alignment: .leading)
             .clipped()
         }
+        .onDisappear {
+            animationTask?.cancel()
+            animationTask = nil
+        }
     }
 
     private func startAnimation() {
+        animationTask?.cancel()
+        animationTask = nil
+
         guard textWidth > containerWidth, containerWidth > 0 else {
             offsetX = 0
             return
@@ -99,13 +107,19 @@ struct MarqueeText: View {
         let distance = textWidth - containerWidth + 20
         let duration = distance / speed
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-            withAnimation(.linear(duration: duration)) {
-                offsetX = -distance
-            }
+        animationTask = Task { @MainActor in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(0.4))
+                guard !Task.isCancelled else { return }
 
-            DispatchQueue.main.asyncAfter(deadline: .now() + duration + 0.6) {
-                startAnimation()
+                withAnimation(.linear(duration: duration)) {
+                    offsetX = -distance
+                }
+
+                try? await Task.sleep(for: .seconds(duration + 0.6))
+                guard !Task.isCancelled else { return }
+
+                offsetX = 0
             }
         }
     }
