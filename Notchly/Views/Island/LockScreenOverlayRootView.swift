@@ -27,6 +27,7 @@ struct LockScreenOverlayRootView: View {
     @State private var lastHandledState: LockScreenOverlayState?
     @State private var currentScreen: NSScreen?
     @State private var resolvedClosedHeight: CGFloat = IslandHeightResolver.fallbackHeight
+    @State private var isArtworkExpanded = false
 
     init(
         model: LockScreenOverlayModel,
@@ -77,6 +78,11 @@ struct LockScreenOverlayRootView: View {
         ZStack(alignment: .top) {
             Color.clear
 
+            lockScreenArtworkBackdrop
+                .opacity(isArtworkExpanded && isLockScreenPlayerVisible ? 1 : 0)
+                .allowsHitTesting(false)
+                .zIndex(0)
+
             ContentView(
                 batteryManager: batteryManager,
                 settingsManager: settingsManager,
@@ -95,14 +101,27 @@ struct LockScreenOverlayRootView: View {
             if settingsManager.showMusic && musicManager.hasNowPlayingContent {
                 LockScreenMusicPlayerView(
                     musicManager: musicManager,
-                    isVisible: isLockScreenPlayerVisible
+                    isVisible: isLockScreenPlayerVisible,
+                    isArtworkExpanded: isArtworkExpanded,
+                    onExpandArtwork: {
+                        guard musicManager.artworkImage != nil else { return }
+
+                        withAnimation(.spring(response: 0.42, dampingFraction: 0.9)) {
+                            isArtworkExpanded = true
+                        }
+                    },
+                    onCollapseArtwork: {
+                        withAnimation(.spring(response: 0.36, dampingFraction: 0.88)) {
+                            isArtworkExpanded = false
+                        }
+                    }
                 )
                 .position(x: screenSize.width / 2, y: lockScreenPlayerYPosition)
                 .opacity(isLockScreenPlayerVisible ? 1 : 0)
                 .scaleEffect(isLockScreenPlayerVisible ? 1 : 0.96)
                 .offset(y: isLockScreenPlayerVisible ? 0 : 18)
                 .allowsHitTesting(isLockScreenPlayerVisible)
-                .zIndex(0)
+                .zIndex(1)
             }
 
             LockScreenIslandView(
@@ -127,6 +146,16 @@ struct LockScreenOverlayRootView: View {
         }
         .onChange(of: model.state) { _, newValue in
             handleStateChange(newValue)
+        }
+        .onChange(of: musicManager.artworkImage) { _, artworkImage in
+            if artworkImage == nil {
+                isArtworkExpanded = false
+            }
+        }
+        .onChange(of: musicManager.hasNowPlayingContent) { _, hasNowPlayingContent in
+            if !hasNowPlayingContent {
+                isArtworkExpanded = false
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSWorkspace.sessionDidResignActiveNotification)) { _ in
             updateClosedHeight(for: currentScreen)
@@ -154,6 +183,55 @@ struct LockScreenOverlayRootView: View {
         )
     }
 
+    @ViewBuilder
+    private var lockScreenArtworkBackdrop: some View {
+        if musicManager.artworkImage != nil {
+            let colors = musicManager.lockScreenArtworkColors
+            let primaryColor = colors.first ?? Color(white: 0.18)
+            let secondaryColor = colors.dropFirst().first ?? Color(white: 0.08)
+            let backdropExtent = max(screenSize.width, screenSize.height)
+
+            ZStack {
+                secondaryColor
+
+                LinearGradient(
+                    colors: [
+                        primaryColor,
+                        secondaryColor,
+                        primaryColor.opacity(0.88)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+
+                RadialGradient(
+                    colors: [
+                        primaryColor.opacity(0.40),
+                        Color.clear
+                    ],
+                    center: .topTrailing,
+                    startRadius: 20,
+                    endRadius: backdropExtent * 0.72
+                )
+
+                RadialGradient(
+                    colors: [
+                        secondaryColor.opacity(0.34),
+                        Color.clear
+                    ],
+                    center: .bottomLeading,
+                    startRadius: 10,
+                    endRadius: backdropExtent * 0.55
+                )
+
+                Color.black.opacity(0.18)
+            }
+            .compositingGroup()
+            .frame(width: screenSize.width, height: screenSize.height)
+            .transition(.opacity)
+        }
+    }
+
     @MainActor
     private func handleStateChange(_ newValue: LockScreenOverlayState) {
         guard lastHandledState != newValue else { return }
@@ -171,6 +249,8 @@ struct LockScreenOverlayRootView: View {
             }
 
         case .music:
+            isArtworkExpanded = false
+
             guard displayedState == .locked else {
                 showLockScreenPlayer = false
 
@@ -229,6 +309,7 @@ struct LockScreenOverlayRootView: View {
         guard showLockScreenPlayer else { return }
 
         withAnimation(.easeOut(duration: 0.12)) {
+            isArtworkExpanded = false
             showLockScreenPlayer = false
         }
     }

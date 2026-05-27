@@ -134,6 +134,7 @@ extension ContentView {
                     },
                     onPrevious: {
                         musicManager.previousTrack()
+                        scheduleMusicAutoCloseAfterInteraction()
                     },
                     onTogglePlay: {
                         animatePlayPauseButton()
@@ -141,6 +142,7 @@ extension ContentView {
                     },
                     onNext: {
                         musicManager.nextTrack()
+                        scheduleMusicAutoCloseAfterInteraction()
                     },
                     onOpenSourceApp: {
                         musicManager.openCurrentPlayerApp()
@@ -209,6 +211,7 @@ extension ContentView {
                 showSkipIndicator("forward.fill")
 
                 musicManager.nextTrack()
+                scheduleMusicAutoCloseAfterInteraction()
                 return
             }
 
@@ -219,6 +222,7 @@ extension ContentView {
                 showSkipIndicator("backward.fill")
 
                 musicManager.previousTrack()
+                scheduleMusicAutoCloseAfterInteraction()
                 return
             }
 
@@ -268,6 +272,7 @@ extension ContentView {
         autoExpandMusicTask?.cancel()
 
         if status == .opened {
+            scheduleAutoClose(after: 2.0)
             return
         }
 
@@ -294,6 +299,11 @@ extension ContentView {
                 }
             }
         }
+    }
+
+    func scheduleMusicAutoCloseAfterInteraction() {
+        guard status == .opened || status == .musicPreview else { return }
+        scheduleAutoClose(after: 2.0)
     }
 }
 
