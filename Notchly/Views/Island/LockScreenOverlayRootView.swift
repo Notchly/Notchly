@@ -78,11 +78,6 @@ struct LockScreenOverlayRootView: View {
         ZStack(alignment: .top) {
             Color.clear
 
-            lockScreenArtworkBackdrop
-                .opacity(isArtworkExpanded && isLockScreenPlayerVisible ? 1 : 0)
-                .allowsHitTesting(false)
-                .zIndex(0)
-
             ContentView(
                 batteryManager: batteryManager,
                 settingsManager: settingsManager,
@@ -181,55 +176,6 @@ struct LockScreenOverlayRootView: View {
                 updateClosedHeight(for: screen)
             }
         )
-    }
-
-    @ViewBuilder
-    private var lockScreenArtworkBackdrop: some View {
-        if musicManager.artworkImage != nil {
-            let colors = musicManager.lockScreenArtworkColors
-            let primaryColor = colors.first ?? Color(white: 0.18)
-            let secondaryColor = colors.dropFirst().first ?? Color(white: 0.08)
-            let backdropExtent = max(screenSize.width, screenSize.height)
-
-            ZStack {
-                secondaryColor
-
-                LinearGradient(
-                    colors: [
-                        primaryColor,
-                        secondaryColor,
-                        primaryColor.opacity(0.88)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-
-                RadialGradient(
-                    colors: [
-                        primaryColor.opacity(0.40),
-                        Color.clear
-                    ],
-                    center: .topTrailing,
-                    startRadius: 20,
-                    endRadius: backdropExtent * 0.72
-                )
-
-                RadialGradient(
-                    colors: [
-                        secondaryColor.opacity(0.34),
-                        Color.clear
-                    ],
-                    center: .bottomLeading,
-                    startRadius: 10,
-                    endRadius: backdropExtent * 0.55
-                )
-
-                Color.black.opacity(0.18)
-            }
-            .compositingGroup()
-            .frame(width: screenSize.width, height: screenSize.height)
-            .transition(.opacity)
-        }
     }
 
     @MainActor

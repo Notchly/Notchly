@@ -32,10 +32,6 @@ final class MusicManager: ObservableObject {
     @MainActor @Published private(set) var currentSource: MusicSource = .none
     @MainActor @Published private(set) var artworkImage: NSImage?
     @MainActor @Published private(set) var waveformColor: Color = .white
-    @MainActor @Published private(set) var lockScreenArtworkColors: [Color] = [
-        Color(white: 0.18),
-        Color(white: 0.08)
-    ]
     @MainActor @Published private(set) var outputVolume: Double = 0.5
     @MainActor @Published private(set) var isOutputMuted: Bool = false
     @MainActor @Published private(set) var outputVolumeEventID = 0
@@ -256,17 +252,12 @@ final class MusicManager: ObservableObject {
             artworkImage = nil
             artworkAvailable = false
             waveformColor = .white
-            lockScreenArtworkColors = [
-                Color(white: 0.18),
-                Color(white: 0.08)
-            ]
             return
         }
 
         let preparedArtwork = artwork.resizedForArtwork()
         artworkImage = preparedArtwork
         artworkAvailable = true
-        lockScreenArtworkColors = preparedArtwork.lockScreenBackdropColors.map { Color(nsColor: $0) }
 
         if let avgColor = preparedArtwork.averageColor?.boostedForWaveform {
             waveformColor = Color(nsColor: avgColor)
@@ -574,10 +565,6 @@ final class MusicManager: ObservableObject {
         artworkAvailable = false
         artworkImage = nil
         waveformColor = .white
-        lockScreenArtworkColors = [
-            Color(white: 0.18),
-            Color(white: 0.08)
-        ]
         basePlaybackPosition = 0
         baseSyncDate = nil
         currentPlaybackRate = 0
