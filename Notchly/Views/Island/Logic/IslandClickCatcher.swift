@@ -49,7 +49,7 @@ final class ClickCatcherNSView: NSView {
     }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
-        self
+        bounds.contains(point) ? self : nil
     }
 
     override func mouseDown(with event: NSEvent) {

@@ -77,6 +77,7 @@ struct LockScreenOverlayRootView: View {
     var body: some View {
         ZStack(alignment: .top) {
             Color.clear
+                .allowsHitTesting(false)
 
             ContentView(
                 batteryManager: batteryManager,

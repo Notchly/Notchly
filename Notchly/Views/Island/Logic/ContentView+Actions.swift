@@ -23,6 +23,8 @@ extension ContentView {
     }
 
     func handleHover(_ hovering: Bool) {
+        guard isPointerInsideIsland != hovering else { return }
+
         isPointerInsideIsland = hovering
 
         withAnimation(.interactiveSpring(duration: 0.28, extraBounce: 0.02)) {

@@ -29,14 +29,10 @@ final class ScrollTrackingView: NSView {
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
-        wantsLayer = true
-        layer?.backgroundColor = NSColor.clear.cgColor
     }
 
     required init?(coder: NSCoder) {
         super.init(coder: coder)
-        wantsLayer = true
-        layer?.backgroundColor = NSColor.clear.cgColor
     }
 
     deinit {

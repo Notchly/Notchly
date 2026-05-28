@@ -13,11 +13,15 @@ import SkyLightWindow
 @MainActor
 final class SkyLightOverlayController {
     private let environment: AppEnvironment
-    private var windowController: NSWindowController?
+    private var islandWindowController: NSWindowController?
+    private var lockScreenWindowController: NSWindowController?
     private var screenChangeObserver: NSObjectProtocol?
     private var screenRefreshTask: Task<Void, Never>?
+    private var lockScreenWindowCloseTask: Task<Void, Never>?
     private var currentScreenID: CGDirectDisplayID?
+    private var currentScreen: NSScreen?
     private var settingsCancellable: AnyCancellable?
+    private var lockStateCancellable: AnyCancellable?
 
     init(environment: AppEnvironment) {
         self.environment = environment
@@ -32,17 +36,24 @@ final class SkyLightOverlayController {
     func stop() {
         screenRefreshTask?.cancel()
         screenRefreshTask = nil
+        lockScreenWindowCloseTask?.cancel()
+        lockScreenWindowCloseTask = nil
         settingsCancellable?.cancel()
         settingsCancellable = nil
+        lockStateCancellable?.cancel()
+        lockStateCancellable = nil
 
         if let screenChangeObserver {
             NotificationCenter.default.removeObserver(screenChangeObserver)
             self.screenChangeObserver = nil
         }
 
-        windowController?.close()
-        windowController = nil
+        islandWindowController?.close()
+        islandWindowController = nil
+        lockScreenWindowController?.close()
+        lockScreenWindowController = nil
         currentScreenID = nil
+        currentScreen = nil
     }
 
     private func installScreenObserver() {
@@ -62,12 +73,23 @@ final class SkyLightOverlayController {
     private func installSettingsObserver() {
         guard settingsCancellable == nil else { return }
 
-        settingsCancellable = environment.settingsManager.$displayTarget
-            .removeDuplicates()
+        settingsCancellable = Publishers.CombineLatest(
+            environment.settingsManager.$displayTarget.removeDuplicates(),
+            environment.settingsManager.$islandWidth.removeDuplicates()
+        )
             .dropFirst()
             .sink { [weak self] _ in
                 Task { @MainActor [weak self] in
                     self?.updateOverlayScreen(force: true)
+                }
+            }
+
+        lockStateCancellable = environment.lockScreenOverlayModel.$state
+            .removeDuplicates()
+            .dropFirst()
+            .sink { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.updateOverlayWindows()
                 }
             }
     }
@@ -90,9 +112,57 @@ final class SkyLightOverlayController {
         guard let screen = targetScreen() else { return }
 
         let screenID = displayID(for: screen)
-        guard force || windowController == nil || currentScreenID != screenID else { return }
+        guard force || islandWindowController == nil || currentScreenID != screenID else { return }
 
-        windowController?.close()
+        islandWindowController?.close()
+        islandWindowController = nil
+        lockScreenWindowController?.close()
+        lockScreenWindowController = nil
+        lockScreenWindowCloseTask?.cancel()
+        lockScreenWindowCloseTask = nil
+
+        currentScreen = screen
+        currentScreenID = screenID
+        updateOverlayWindows()
+    }
+
+    private func updateOverlayWindows() {
+        guard let screen = currentScreen ?? targetScreen() else { return }
+        currentScreen = screen
+
+        switch environment.lockScreenOverlayModel.state {
+        case .locked:
+            lockScreenWindowCloseTask?.cancel()
+            lockScreenWindowCloseTask = nil
+            closeIslandWindow()
+            showLockScreenWindow(on: screen)
+
+        case .music:
+            if lockScreenWindowController == nil {
+                showIslandWindow(on: screen)
+            } else {
+                scheduleIslandWindowAfterUnlock(on: screen)
+                scheduleLockScreenWindowCloseAfterUnlock()
+            }
+        }
+    }
+
+    private func showIslandWindow(on screen: NSScreen) {
+        if islandWindowController == nil {
+            islandWindowController = makeIslandWindowController(on: screen)
+        }
+
+        updateIslandWindowFrame(on: screen)
+        islandWindowController?.window?.orderFrontRegardless()
+    }
+
+    private func closeIslandWindow() {
+        islandWindowController?.close()
+        islandWindowController = nil
+    }
+
+    private func showLockScreenWindow(on screen: NSScreen) {
+        guard lockScreenWindowController == nil else { return }
 
         let view = AnyView(
             LockScreenOverlayRootView(
@@ -107,8 +177,96 @@ final class SkyLightOverlayController {
             )
         )
 
-        windowController = SkyLightOperator.shared.delegateView(view, toScreen: screen)
-        currentScreenID = screenID
+        lockScreenWindowController = SkyLightOperator.shared.delegateView(view, toScreen: screen)
+        configureOverlayWindow(lockScreenWindowController?.window)
+    }
+
+    private func scheduleIslandWindowAfterUnlock(on screen: NSScreen) {
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(220))
+            guard !Task.isCancelled else { return }
+            guard self?.environment.lockScreenOverlayModel.state == .music else { return }
+            self?.showIslandWindow(on: screen)
+        }
+    }
+
+    private func scheduleLockScreenWindowCloseAfterUnlock() {
+        lockScreenWindowCloseTask?.cancel()
+
+        lockScreenWindowCloseTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(420))
+            guard !Task.isCancelled else { return }
+            guard self?.environment.lockScreenOverlayModel.state == .music else { return }
+
+            self?.lockScreenWindowController?.close()
+            self?.lockScreenWindowController = nil
+            self?.lockScreenWindowCloseTask = nil
+        }
+    }
+
+    private func makeIslandWindowController(on screen: NSScreen) -> NSWindowController {
+        let size = islandWindowSize
+        let window = NSPanel(
+            contentRect: islandWindowFrame(for: screen, size: size),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+
+        window.isOpaque = false
+        window.backgroundColor = .clear
+        window.hasShadow = false
+        window.hidesOnDeactivate = false
+        window.isMovable = false
+        window.level = .init(rawValue: Int(Int32.max - 3))
+        window.collectionBehavior = [
+            .fullScreenAuxiliary,
+            .stationary,
+            .canJoinAllSpaces,
+            .ignoresCycle,
+        ]
+        window.canBecomeVisibleWithoutLogin = true
+        configureOverlayWindow(window)
+
+        let view = ContentView(
+            batteryManager: environment.batteryManager,
+            settingsManager: environment.settingsManager,
+            dynamicManager: environment.dynamicManager,
+            musicManager: environment.musicManager,
+            focusManager: environment.focusManager,
+            brightnessManager: environment.brightnessManager,
+            animationsEnabled: true
+        )
+        .frame(width: size.width, height: size.height, alignment: .top)
+
+        window.contentViewController = NSHostingController(rootView: view)
+        SkyLightOperator.shared.delegateWindow(window)
+
+        return NSWindowController(window: window)
+    }
+
+    private func updateIslandWindowFrame(on screen: NSScreen) {
+        guard let window = islandWindowController?.window else { return }
+        window.setFrame(islandWindowFrame(for: screen, size: islandWindowSize), display: true)
+    }
+
+    private var islandWindowSize: CGSize {
+        let baseWidth = min(max(CGFloat(environment.settingsManager.islandWidth), 280), 360)
+        return CGSize(width: baseWidth + 96, height: 280)
+    }
+
+    private func islandWindowFrame(for screen: NSScreen, size: CGSize) -> NSRect {
+        NSRect(
+            x: screen.frame.midX - size.width / 2,
+            y: screen.frame.maxY - size.height,
+            width: size.width,
+            height: size.height
+        )
+    }
+
+    private func configureOverlayWindow(_ window: NSWindow?) {
+        guard let window else { return }
+        window.acceptsMouseMovedEvents = false
     }
 
     private func targetScreen() -> NSScreen? {
