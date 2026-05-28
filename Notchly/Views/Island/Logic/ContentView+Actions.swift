@@ -192,6 +192,7 @@ extension ContentView {
             }
 
             await MainActor.run {
+                focusStatusTask = nil
                 scheduleFocusReturn(
                     returnStatus: returnStatus,
                     collapseDuration: collapseDuration

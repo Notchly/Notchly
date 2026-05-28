@@ -316,12 +316,12 @@ final class FocusManager: ObservableObject {
         case "_NSDoNotDisturbEnabledNotification":
             refreshTask?.cancel()
             refreshTask = nil
-            setFocusState(true, announceChanges: true)
+            setFocusState(true, announceChanges: true, forcePublish: true)
 
         case "_NSDoNotDisturbDisabledNotification":
             refreshTask?.cancel()
             refreshTask = nil
-            setFocusState(false, announceChanges: true)
+            setFocusState(false, announceChanges: true, forcePublish: true)
 
         default:
             requestFocusStateRefresh()
@@ -374,14 +374,18 @@ final class FocusManager: ObservableObject {
     }
 
     @discardableResult
-    private func setFocusState(_ isActive: Bool, announceChanges: Bool) -> Bool {
+    private func setFocusState(
+        _ isActive: Bool,
+        announceChanges: Bool,
+        forcePublish: Bool = false
+    ) -> Bool {
         let didChange = isFocusActive != isActive
 
         if didChange {
             isFocusActive = isActive
         }
 
-        if announceChanges && didChange {
+        if announceChanges && (didChange || forcePublish) {
             publishFocusEvent(isActive)
         }
 
