@@ -34,7 +34,9 @@ final class MusicManager: ObservableObject {
     @MainActor @Published private(set) var waveformColor: Color = .white
     @MainActor @Published private(set) var outputVolume: Double = 0.5
     @MainActor @Published private(set) var isOutputMuted: Bool = false
+    @MainActor @Published private(set) var outputVolumeEventID = 0
     @MainActor @Published private(set) var isShuffleEnabled: Bool = false
+    @MainActor @Published private(set) var isResolvingNowPlaying: Bool = false
 
     @MainActor var hasNowPlayingContent: Bool {
         currentSource != .none && (!trackTitle.isEmpty || !artistName.isEmpty || !albumTitle.isEmpty)
@@ -46,44 +48,102 @@ final class MusicManager: ObservableObject {
 
     nonisolated private let mediaController = MediaController()
     private var progressTask: Task<Void, Never>?
+    private var activeSourceRefreshTask: Task<Void, Never>?
+    private var startupTask: Task<Void, Never>?
     private var volumePollTimer: Timer?
+    private var appTerminationObserver: NSObjectProtocol?
+    private var isStarted = false
 
     private var basePlaybackPosition: Double = 0
     private var baseSyncDate: Date?
     private var currentPlaybackRate: Double = 0
     private var isPreviewSeeking = false
     private var currentTrackIdentity: String = ""
+    private var currentPlayerBundleIdentifier: String = ""
     private var lastAudibleOutputVolume: Double = 0.5
     private var ignoreTransientZeroProgressUntil: Date?
     private var pendingShuffleState: Bool?
     private var pendingShuffleStateUntil: Date?
+    private var lastActiveSourceScanTime: TimeInterval = 0
+    private var activeSourceRefreshShouldClearIfEmpty = false
 
     private let progressTickInterval: TimeInterval = 1.0
-    private let volumePollInterval: TimeInterval = 0.75
+    private let volumePollInterval: TimeInterval = 0.22
+    private let outputVolumeEventThreshold = 0.045
+    private let activeSourceScanThrottle: TimeInterval = 1.2
 
     init() {
         bindMediaController()
+        observePlayerTermination()
+    }
+
+    @MainActor
+    func start() {
+        guard !isStarted else { return }
+        isStarted = true
+        isResolvingNowPlaying = true
 
         let mediaController = mediaController
         Task.detached(priority: .utility) {
             mediaController.startListening()
         }
 
-        Task {
-            await bootstrapNowPlaying()
-        }
+        scheduleStartupFallback()
+    }
 
-        Task { @MainActor in
-            refreshOutputVolume()
-            startVolumePolling()
+    private func scheduleStartupFallback() {
+        startupTask?.cancel()
+        startupTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(700))
+            guard !Task.isCancelled else { return }
+            guard let self else { return }
+
+            let needsFallback = await MainActor.run { [weak self] in
+                guard let self else { return false }
+                return !self.hasNowPlayingContent
+            }
+
+            if needsFallback {
+                _ = await fetchTrackInfoOnce()
+            }
+
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled else { return }
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                if self.isResolvingNowPlaying && !self.hasNowPlayingContent {
+                    self.isResolvingNowPlaying = false
+                }
+                self.refreshOutputVolume(emitsEvent: false)
+                self.startVolumePolling()
+                self.startupTask = nil
+            }
         }
     }
 
-    deinit {
+    @MainActor
+    func stop() {
+        startupTask?.cancel()
+        startupTask = nil
         progressTask?.cancel()
         progressTask = nil
+        activeSourceRefreshTask?.cancel()
+        activeSourceRefreshTask = nil
         volumePollTimer?.invalidate()
         volumePollTimer = nil
+        mediaController.stopListening()
+        isResolvingNowPlaying = false
+        isStarted = false
+    }
+
+    deinit {
+        startupTask?.cancel()
+        progressTask?.cancel()
+        activeSourceRefreshTask?.cancel()
+        volumePollTimer?.invalidate()
+        if let appTerminationObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(appTerminationObserver)
+        }
         mediaController.stopListening()
     }
 
@@ -155,7 +215,7 @@ final class MusicManager: ObservableObject {
         let newArtistName = payload.artist ?? ""
         let newAlbumTitle = payload.album ?? ""
 
-        let playing = payload.isPlaying ?? ((payload.playbackRate ?? 0) > 0)
+        let playing = isPayloadPlaying(payload)
         let durationMicros = payload.durationMicros ?? 0
         let reportedDurationMs = durationMicros / 1000.0
 
@@ -164,6 +224,18 @@ final class MusicManager: ObservableObject {
         let bundleIdentifier = payload.bundleIdentifier ?? ""
         let newSourceName = payload.applicationName ?? prettySourceName(from: bundleIdentifier)
         let newSource = mapSource(from: bundleIdentifier)
+
+        if shouldIgnorePausedPayload(isPlaying: playing, bundleIdentifier: bundleIdentifier) {
+            if isResolvingNowPlaying {
+                isResolvingNowPlaying = false
+            }
+            scheduleActiveSourceRefresh(ignoring: bundleIdentifier, clearsCurrentIfNoActiveSource: true)
+            return
+        }
+
+        if !playing {
+            scheduleActiveSourceRefresh(ignoring: bundleIdentifier)
+        }
 
         let newTrackIdentity = [
             newTrackTitle,
@@ -183,26 +255,48 @@ final class MusicManager: ObservableObject {
         let elapsedMs = shouldPreservePlaybackProgress ? estimatedPlaybackPositionMs() : (reportedElapsedMs ?? 0)
 
         currentTrackIdentity = newTrackIdentity
+        currentPlayerBundleIdentifier = bundleIdentifier
+        if isResolvingNowPlaying {
+            isResolvingNowPlaying = false
+        }
 
-        trackTitle = newTrackTitle
-        artistName = newArtistName
-        albumTitle = newAlbumTitle
-        isPlaying = playing
-        durationMs = newDurationMs
-        isShuffleEnabled = isShuffleAvailable(for: newSource)
+        if trackTitle != newTrackTitle {
+            trackTitle = newTrackTitle
+        }
+        if artistName != newArtistName {
+            artistName = newArtistName
+        }
+        if albumTitle != newAlbumTitle {
+            albumTitle = newAlbumTitle
+        }
+        if isPlaying != playing {
+            isPlaying = playing
+        }
+        if durationMs != newDurationMs {
+            durationMs = newDurationMs
+        }
+
+        let newShuffleEnabled = isShuffleAvailable(for: newSource)
             ? resolvedShuffleEnabled((payload.shuffleMode ?? .off) != .off)
             : false
+        if isShuffleEnabled != newShuffleEnabled {
+            isShuffleEnabled = newShuffleEnabled
+        }
 
         basePlaybackPosition = elapsedMs
         baseSyncDate = Date()
         currentPlaybackRate = payload.playbackRate ?? (playing ? 1.0 : 0.0)
 
-        if !isPreviewSeeking {
+        if !isPreviewSeeking && playbackPosition != elapsedMs {
             playbackPosition = elapsedMs
         }
 
-        sourceName = newSourceName
-        currentSource = newSource
+        if sourceName != newSourceName {
+            sourceName = newSourceName
+        }
+        if currentSource != newSource {
+            currentSource = newSource
+        }
 
         if trackChanged {
             updateArtwork(from: payload.artwork)
@@ -213,23 +307,61 @@ final class MusicManager: ObservableObject {
         syncProgressTimerState()
     }
 
+    private func observePlayerTermination() {
+        appTerminationObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didTerminateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let terminatedApp = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
+                  let bundleIdentifier = terminatedApp.bundleIdentifier else {
+                return
+            }
+
+            Task { @MainActor [weak self] in
+                self?.handlePlayerTermination(bundleIdentifier: bundleIdentifier)
+            }
+        }
+    }
+
+    @MainActor
+    private func handlePlayerTermination(bundleIdentifier: String) {
+        guard !currentPlayerBundleIdentifier.isEmpty else { return }
+        guard bundleIdentifier == currentPlayerBundleIdentifier else { return }
+
+        clearPlaybackState()
+    }
+
     @MainActor
     private func updateArtwork(from artwork: NSImage?) {
         guard let artwork else {
-            artworkImage = nil
-            artworkAvailable = false
-            waveformColor = .white
+            if artworkImage != nil {
+                artworkImage = nil
+            }
+            if artworkAvailable {
+                artworkAvailable = false
+            }
+            if waveformColor != .white {
+                waveformColor = .white
+            }
             return
         }
 
         let preparedArtwork = artwork.resizedForArtwork()
         artworkImage = preparedArtwork
-        artworkAvailable = true
+        if !artworkAvailable {
+            artworkAvailable = true
+        }
 
         if let avgColor = preparedArtwork.averageColor?.boostedForWaveform {
-            waveformColor = Color(nsColor: avgColor)
+            let nextWaveformColor = Color(nsColor: avgColor)
+            if waveformColor != nextWaveformColor {
+                waveformColor = nextWaveformColor
+            }
         } else {
-            waveformColor = .white
+            if waveformColor != .white {
+                waveformColor = .white
+            }
         }
     }
 
@@ -400,6 +532,10 @@ final class MusicManager: ObservableObject {
 
         guard SystemOutputVolume.setVolume(clamped) else {
             outputVolume = clamped
+            isOutputMuted = clamped <= 0.01
+            if clamped > 0.01 {
+                lastAudibleOutputVolume = clamped
+            }
             return
         }
 
@@ -408,7 +544,7 @@ final class MusicManager: ObservableObject {
             _ = SystemOutputVolume.setMuted(false)
         }
 
-        refreshOutputVolume()
+        refreshOutputVolume(emitsEvent: false)
     }
 
     @MainActor
@@ -420,7 +556,7 @@ final class MusicManager: ObservableObject {
             setOutputVolume(0)
         }
 
-        refreshOutputVolume()
+        refreshOutputVolume(emitsEvent: false)
     }
 
     @MainActor
@@ -470,21 +606,24 @@ final class MusicManager: ObservableObject {
     private func startVolumePolling() {
         guard volumePollTimer == nil else { return }
 
-        volumePollTimer = Timer.scheduledTimer(withTimeInterval: volumePollInterval, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: volumePollInterval, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
-                self?.refreshOutputVolume()
+                self?.refreshOutputVolume(emitsEvent: true)
             }
         }
 
-        if let volumePollTimer {
-            RunLoop.main.add(volumePollTimer, forMode: .common)
-        }
+        volumePollTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
     }
 
     @MainActor
-    private func refreshOutputVolume() {
+    private func refreshOutputVolume(emitsEvent: Bool) {
+        let previousDisplayVolume = isOutputMuted ? 0 : outputVolume
+        let previousMuted = isOutputMuted
+        var nextVolume = outputVolume
+
         if let currentVolume = SystemOutputVolume.currentVolume() {
-            outputVolume = currentVolume
+            nextVolume = currentVolume
 
             if currentVolume > 0.01 {
                 lastAudibleOutputVolume = currentVolume
@@ -492,33 +631,167 @@ final class MusicManager: ObservableObject {
         }
 
         let muted = SystemOutputVolume.isMuted() ?? false
-        isOutputMuted = muted || outputVolume <= 0.01
+        let nextMuted = muted || nextVolume <= 0.01
+
+        let currentDisplayVolume = nextMuted ? 0 : nextVolume
+        let volumeChanged = abs(currentDisplayVolume - previousDisplayVolume) >= outputVolumeEventThreshold
+        let muteChanged = previousMuted != nextMuted
+
+        if abs(outputVolume - nextVolume) >= 0.001 {
+            outputVolume = nextVolume
+        }
+
+        if isOutputMuted != nextMuted {
+            isOutputMuted = nextMuted
+        }
+
+        if emitsEvent && (volumeChanged || muteChanged) {
+            outputVolumeEventID += 1
+        }
     }
 
     @MainActor
     private func clearPlaybackState() {
-        isPlaying = false
-        trackTitle = ""
-        artistName = ""
-        albumTitle = ""
-        playbackPosition = 0
-        durationMs = 0
-        sourceName = ""
-        currentSource = .none
-        artworkAvailable = false
-        artworkImage = nil
-        waveformColor = .white
+        if isPlaying {
+            isPlaying = false
+        }
+        if !trackTitle.isEmpty {
+            trackTitle = ""
+        }
+        if !artistName.isEmpty {
+            artistName = ""
+        }
+        if !albumTitle.isEmpty {
+            albumTitle = ""
+        }
+        if playbackPosition != 0 {
+            playbackPosition = 0
+        }
+        if durationMs != 0 {
+            durationMs = 0
+        }
+        if !sourceName.isEmpty {
+            sourceName = ""
+        }
+        if currentSource != .none {
+            currentSource = .none
+        }
+        if artworkAvailable {
+            artworkAvailable = false
+        }
+        if artworkImage != nil {
+            artworkImage = nil
+        }
+        if waveformColor != .white {
+            waveformColor = .white
+        }
         basePlaybackPosition = 0
         baseSyncDate = nil
         currentPlaybackRate = 0
         isPreviewSeeking = false
         currentTrackIdentity = ""
-        isShuffleEnabled = false
+        currentPlayerBundleIdentifier = ""
+        if isShuffleEnabled {
+            isShuffleEnabled = false
+        }
+        if isResolvingNowPlaying {
+            isResolvingNowPlaying = false
+        }
         ignoreTransientZeroProgressUntil = nil
         pendingShuffleState = nil
         pendingShuffleStateUntil = nil
 
         stopProgressTimer()
+    }
+
+    @MainActor
+    private func shouldIgnorePausedPayload(isPlaying incomingIsPlaying: Bool, bundleIdentifier: String) -> Bool {
+        guard !incomingIsPlaying, isPlaying else { return false }
+        guard !bundleIdentifier.isEmpty, !currentPlayerBundleIdentifier.isEmpty else { return false }
+        return bundleIdentifier != currentPlayerBundleIdentifier
+    }
+
+    @MainActor
+    private func scheduleActiveSourceRefresh(ignoring ignoredBundleIdentifier: String) {
+        scheduleActiveSourceRefresh(ignoring: ignoredBundleIdentifier, clearsCurrentIfNoActiveSource: false)
+    }
+
+    @MainActor
+    private func scheduleActiveSourceRefresh(
+        ignoring ignoredBundleIdentifier: String,
+        clearsCurrentIfNoActiveSource: Bool
+    ) {
+        if clearsCurrentIfNoActiveSource {
+            activeSourceRefreshShouldClearIfEmpty = true
+        }
+
+        let now = Date.timeIntervalSinceReferenceDate
+        guard activeSourceRefreshTask == nil else { return }
+        guard now - lastActiveSourceScanTime >= activeSourceScanThrottle else { return }
+
+        lastActiveSourceScanTime = now
+        let sourceBundleIdentifierAtScan = currentPlayerBundleIdentifier
+        let trackIdentityAtScan = currentTrackIdentity
+
+        activeSourceRefreshTask = Task { [weak self] in
+            guard let self else { return }
+
+            let trackInfo = await self.fetchFirstPlayingTrackInfo(ignoring: ignoredBundleIdentifier)
+
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                self.activeSourceRefreshTask = nil
+                let shouldClearStaleSource = self.activeSourceRefreshShouldClearIfEmpty
+                self.activeSourceRefreshShouldClearIfEmpty = false
+
+                guard let trackInfo, self.isPayloadPlaying(trackInfo.payload) else {
+                    if shouldClearStaleSource,
+                       self.currentPlayerBundleIdentifier == sourceBundleIdentifierAtScan,
+                       self.currentTrackIdentity == trackIdentityAtScan {
+                        self.clearPlaybackState()
+                    }
+                    return
+                }
+
+                self.apply(trackInfo)
+            }
+        }
+    }
+
+    private func fetchFirstPlayingTrackInfo(ignoring ignoredBundleIdentifier: String) async -> TrackInfo? {
+        for bundleIdentifier in activePlayerCandidateBundleIdentifiers where bundleIdentifier != ignoredBundleIdentifier {
+            guard let trackInfo = await fetchTrackInfo(for: bundleIdentifier) else { continue }
+            guard isPayloadPlaying(trackInfo.payload) else { continue }
+            return trackInfo
+        }
+
+        return nil
+    }
+
+    private func fetchTrackInfo(for bundleIdentifier: String) async -> TrackInfo? {
+        await withCheckedContinuation { continuation in
+            let controller = MediaController(bundleIdentifier: bundleIdentifier)
+            controller.getTrackInfo { trackInfo in
+                continuation.resume(returning: trackInfo)
+            }
+        }
+    }
+
+    private var activePlayerCandidateBundleIdentifiers: [String] {
+        [
+            "com.apple.Music",
+            "com.google.Chrome",
+            "com.apple.Safari",
+            "com.brave.Browser",
+            "org.mozilla.firefox",
+            "com.microsoft.edgemac",
+            "company.thebrowser.Browser",
+            "com.spotify.client"
+        ]
+    }
+
+    private func isPayloadPlaying(_ payload: TrackInfo.Payload) -> Bool {
+        payload.isPlaying ?? ((payload.playbackRate ?? 0) > 0)
     }
 
     @MainActor

@@ -83,7 +83,25 @@ extension ContentView {
         }
     }
 
+    func handleBatteryVisibilityChange(_ isEnabled: Bool) {
+        guard !isEnabled else { return }
+
+        showChargingPop = false
+
+        guard dynamicManager.currentModule != .music else { return }
+        guard status == .opened || status == .popping else { return }
+
+        withAnimation(animation) {
+            status = .closed
+        }
+    }
+
     func handleChargingChange(_ newValue: Bool) {
+        guard settingsManager.showBattery else {
+            showChargingPop = false
+            return
+        }
+        guard dynamicManager.currentModule == .battery else { return }
         guard hasFinishedInitialAppear else { return }
         guard status == .closed else { return }
 
@@ -95,6 +113,7 @@ extension ContentView {
             }
 
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
+                guard settingsManager.showBattery else { return }
                 guard status != .opened else { return }
 
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.86)) {
@@ -102,6 +121,7 @@ extension ContentView {
                 }
 
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+                    guard settingsManager.showBattery else { return }
                     withAnimation(animation) {
                         status = .closed
                     }
@@ -113,6 +133,7 @@ extension ContentView {
             }
 
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                guard settingsManager.showBattery else { return }
                 withAnimation(animation) {
                     status = .closed
                 }

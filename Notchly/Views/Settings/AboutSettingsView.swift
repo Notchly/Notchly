@@ -39,7 +39,8 @@ struct AboutSettingsView: View {
                     AboutLinkRow(
                         icon: "globe",
                         title: "Website",
-                        subtitle: "Open the Notchly website."
+                        subtitle: "Open the Notchly website.",
+                        hoverBorderEdge: .top
                     ) {
                         open("https://notchly.xyz")
                     }
@@ -49,7 +50,8 @@ struct AboutSettingsView: View {
                     AboutLinkRow(
                         icon: "envelope.fill",
                         title: "Contact",
-                        subtitle: "Send feedback or report an issue."
+                        subtitle: "Send feedback or report an issue.",
+                        hoverBorderEdge: .bottom
                     ) {
                         open("mailto:hello@notchly.app")
                     }
@@ -112,10 +114,18 @@ struct AboutSettingsView: View {
 }
 
 private struct AboutLinkRow: View {
+    enum HoverBorderEdge {
+        case top
+        case bottom
+    }
+
     let icon: String
     let title: String
     let subtitle: String
+    let hoverBorderEdge: HoverBorderEdge
     let action: () -> Void
+
+    @State private var isHovered = false
 
     var body: some View {
         Button(action: action) {
@@ -149,12 +159,29 @@ private struct AboutLinkRow: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 11)
             .contentShape(Rectangle())
+            .background(.white.opacity(isHovered ? 0.045 : 0))
+            .overlay {
+                VStack(spacing: 0) {
+                    if hoverBorderEdge == .bottom {
+                        Spacer(minLength: 0)
+                    }
+
+                    Rectangle()
+                        .fill(.white.opacity(isHovered ? 0.12 : 0))
+                        .frame(height: 1)
+
+                    if hoverBorderEdge == .top {
+                        Spacer(minLength: 0)
+                    }
+                }
+            }
         }
-        .buttonStyle(SubtleHoverButtonStyle(
-            pressedScale: 0.98,
-            hoverScale: 1.01,
-            hoverBackgroundOpacity: 0.06,
-            cornerRadius: 12
-        ))
+        .buttonStyle(.plain)
+        .scaleEffect(isHovered ? 1.006 : 1)
+        .onHover { hovering in
+            withAnimation(.interactiveSpring(duration: 0.18, extraBounce: 0.06)) {
+                isHovered = hovering
+            }
+        }
     }
 }

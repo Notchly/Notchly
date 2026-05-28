@@ -10,7 +10,7 @@ import Combine
 
 @MainActor
 final class DynamicManager: ObservableObject {
-    @Published var currentModule: IslandModule = .battery
+    @Published var currentModule: IslandModule = .none
 
     let batteryManager: BatteryManager
     let musicManager: MusicManager
@@ -41,7 +41,8 @@ final class DynamicManager: ObservableObject {
         musicManager.$isPlaying
             .combineLatest(
                 musicManager.$trackTitle,
-                musicManager.$currentSource
+                musicManager.$currentSource,
+                musicManager.$isResolvingNowPlaying
             )
             .map { _ in () }
             .debounce(for: .milliseconds(50), scheduler: RunLoop.main)
@@ -60,6 +61,8 @@ final class DynamicManager: ObservableObject {
 
         if settingsManager.showMusic && musicManager.hasNowPlayingContent {
             newModule = .music
+        } else if settingsManager.showMusic && musicManager.isResolvingNowPlaying {
+            newModule = .none
         } else if settingsManager.showBattery {
             newModule = .battery
         } else {

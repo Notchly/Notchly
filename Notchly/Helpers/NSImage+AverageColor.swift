@@ -61,6 +61,7 @@ extension NSImage {
             alpha: 1
         )
     }
+
 }
 
 extension NSColor {
@@ -74,6 +75,11 @@ extension NSColor {
 
         rgb.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
 
+        if saturation < 0.12 {
+            let white = min(max(brightness, 0.72), 0.92)
+            return NSColor(white: white, alpha: 1)
+        }
+
         return NSColor(
             hue: hue,
             saturation: max(0.55, saturation),
@@ -81,4 +87,5 @@ extension NSColor {
             alpha: 1
         )
     }
+
 }

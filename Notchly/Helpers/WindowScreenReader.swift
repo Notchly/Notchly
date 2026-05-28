@@ -20,35 +20,49 @@ struct WindowScreenReader: NSViewRepresentable {
     func updateNSView(_ nsView: NSView, context: Context) {
         guard let view = nsView as? ScreenAwareView else { return }
         view.onScreenChange = onUpdate
+    }
 
-        DispatchQueue.main.async {
-            view.notifyCurrentScreen()
-        }
+    static func dismantleNSView(_ nsView: NSView, coordinator: ()) {
+        guard let view = nsView as? ScreenAwareView else { return }
+        view.prepareForRemoval()
     }
 }
 
 final class ScreenAwareView: NSView {
     var onScreenChange: ((NSScreen?) -> Void)?
+    private weak var observedWindow: NSWindow?
+    private weak var lastNotifiedScreen: NSScreen?
+    private var hasPendingScreenNotification = false
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         subscribeToWindowChanges()
-        notifyCurrentScreen()
+        scheduleScreenNotification()
     }
 
     override func viewDidChangeBackingProperties() {
         super.viewDidChangeBackingProperties()
-        notifyCurrentScreen()
+        scheduleScreenNotification()
     }
 
-    func notifyCurrentScreen() {
-        onScreenChange?(window?.screen)
+    func scheduleScreenNotification() {
+        guard !hasPendingScreenNotification else { return }
+        hasPendingScreenNotification = true
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.hasPendingScreenNotification = false
+            self.flushScreenNotification()
+        }
     }
 
     private func subscribeToWindowChanges() {
-        NotificationCenter.default.removeObserver(self)
+        guard observedWindow !== window else { return }
+
+        unsubscribeFromWindowChanges()
 
         guard let window else { return }
+        observedWindow = window
 
         NotificationCenter.default.addObserver(
             self,
@@ -79,23 +93,68 @@ final class ScreenAwareView: NSView {
         )
     }
 
+    private func unsubscribeFromWindowChanges() {
+        guard let observedWindow else {
+            NotificationCenter.default.removeObserver(self)
+            return
+        }
+
+        NotificationCenter.default.removeObserver(
+            self,
+            name: NSWindow.didMoveNotification,
+            object: observedWindow
+        )
+        NotificationCenter.default.removeObserver(
+            self,
+            name: NSWindow.didResizeNotification,
+            object: observedWindow
+        )
+        NotificationCenter.default.removeObserver(
+            self,
+            name: NSWindow.didChangeScreenNotification,
+            object: observedWindow
+        )
+        NotificationCenter.default.removeObserver(
+            self,
+            name: NSWindow.didChangeScreenProfileNotification,
+            object: observedWindow
+        )
+
+        self.observedWindow = nil
+    }
+
+    private func flushScreenNotification() {
+        let screen = window?.screen
+        guard lastNotifiedScreen !== screen else { return }
+
+        lastNotifiedScreen = screen
+        onScreenChange?(screen)
+    }
+
+    func prepareForRemoval() {
+        hasPendingScreenNotification = false
+        lastNotifiedScreen = nil
+        onScreenChange = nil
+        unsubscribeFromWindowChanges()
+    }
+
     @objc private func windowDidMove() {
-        notifyCurrentScreen()
+        scheduleScreenNotification()
     }
 
     @objc private func windowDidResize() {
-        notifyCurrentScreen()
+        scheduleScreenNotification()
     }
 
     @objc private func windowDidChangeScreen() {
-        notifyCurrentScreen()
+        scheduleScreenNotification()
     }
 
     @objc private func windowDidChangeScreenProfile() {
-        notifyCurrentScreen()
+        scheduleScreenNotification()
     }
 
     deinit {
-        NotificationCenter.default.removeObserver(self)
+        prepareForRemoval()
     }
 }

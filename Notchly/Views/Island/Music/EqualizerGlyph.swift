@@ -103,6 +103,10 @@ final class EqualizerGlyphNSView: NSView {
     override func layout() {
         super.layout()
 
+        layoutBars()
+    }
+
+    private func layoutBars() {
         let startX = (bounds.width - totalWidth) / 2
         let centerY = bounds.midY
 
@@ -137,17 +141,20 @@ final class EqualizerGlyphNSView: NSView {
         speed: Double
     ) {
         let nextBarCount = min(idleHeights.count, activeHeights.count)
+        let nextIdleHeights = Array(idleHeights.prefix(nextBarCount))
+        let nextActiveHeights = Array(activeHeights.prefix(nextBarCount))
+        let nextPhaseOffsets = Array(phaseOffsets.prefix(nextBarCount))
         let geometryChanged =
-            self.idleHeights != Array(idleHeights.prefix(nextBarCount)) ||
-            self.activeHeights != Array(activeHeights.prefix(nextBarCount)) ||
-            self.phaseOffsets != phaseOffsets ||
+            self.idleHeights != nextIdleHeights ||
+            self.activeHeights != nextActiveHeights ||
+            self.phaseOffsets != nextPhaseOffsets ||
             self.barWidth != barWidth ||
             self.spacing != spacing ||
             self.speed != speed
 
-        self.idleHeights = Array(idleHeights.prefix(nextBarCount))
-        self.activeHeights = Array(activeHeights.prefix(nextBarCount))
-        self.phaseOffsets = phaseOffsets
+        self.idleHeights = nextIdleHeights
+        self.activeHeights = nextActiveHeights
+        self.phaseOffsets = nextPhaseOffsets
         self.barWidth = barWidth
         self.spacing = spacing
         self.speed = speed
@@ -217,7 +224,7 @@ final class EqualizerGlyphNSView: NSView {
     }
 
     private func startAnimating() {
-        layoutSubtreeIfNeeded()
+        layoutBars()
 
         for (index, layer) in barLayers.enumerated() {
             layer.removeAnimation(forKey: "equalizer")

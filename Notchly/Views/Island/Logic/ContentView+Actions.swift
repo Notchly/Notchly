@@ -14,6 +14,8 @@ extension ContentView {
         showChargingPop = false
         isHovered = false
         hideFocusStatusPreview(animated: false)
+        hideBrightnessStatusPreview(animated: false)
+        hideVolumeStatusPreview(animated: false)
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
             hasFinishedInitialAppear = true
@@ -21,6 +23,8 @@ extension ContentView {
     }
 
     func handleHover(_ hovering: Bool) {
+        guard isPointerInsideIsland != hovering else { return }
+
         isPointerInsideIsland = hovering
 
         withAnimation(.interactiveSpring(duration: 0.28, extraBounce: 0.02)) {
@@ -130,9 +134,13 @@ extension ContentView {
         let collapseDuration = 0.34
 
         focusStatusTask?.cancel()
+        brightnessStatusTask?.cancel()
+        volumeStatusTask?.cancel()
         autoExpandMusicTask?.cancel()
         showMusicVolumeControl = false
         focusStatusIsActive = isActive
+        pendingBrightnessEventTimestamp = nil
+        pendingVolumeEventTimestamp = nil
 
         if status == .focusPreview {
             scheduleFocusReturn(
@@ -140,6 +148,16 @@ extension ContentView {
                 collapseDuration: collapseDuration
             )
             return
+        }
+
+        if status == .brightnessPreview || status == .brightnessCollapse {
+            brightnessCollapseShowsMusic = true
+            status = brightnessReturnStatus
+        }
+
+        if status == .volumePreview || status == .volumeCollapse {
+            volumeCollapseShowsMusic = true
+            status = volumeReturnStatus
         }
 
         if status != .focusPreview && status != .focusCollapse {
@@ -176,6 +194,7 @@ extension ContentView {
             }
 
             await MainActor.run {
+                focusStatusTask = nil
                 scheduleFocusReturn(
                     returnStatus: returnStatus,
                     collapseDuration: collapseDuration
@@ -191,7 +210,7 @@ extension ContentView {
         focusStatusTask?.cancel()
 
         focusStatusTask = Task {
-            try? await Task.sleep(for: .seconds(2))
+            try? await Task.sleep(for: .seconds(settingsManager.focusAnimationDuration))
             guard !Task.isCancelled else { return }
 
             await MainActor.run {
@@ -224,6 +243,336 @@ extension ContentView {
         }
     }
 
+    func handleBrightnessEvent() {
+        guard settingsManager.showBrightnessStatus else { return }
+
+        lastBrightnessStatusEventTime = Date.timeIntervalSinceReferenceDate
+
+        guard canShowBrightnessStatusAnimation else {
+            queuePendingBrightnessEvent()
+            return
+        }
+
+        pendingBrightnessEventTimestamp = nil
+        startBrightnessStatusAnimation()
+    }
+
+    var canShowBrightnessStatusAnimation: Bool {
+        animationsEnabled && settingsManager.showBrightnessStatus
+    }
+
+    func queuePendingBrightnessEvent() {
+        pendingBrightnessEventTimestamp = Date.timeIntervalSinceReferenceDate
+    }
+
+    func playPendingBrightnessEventIfReady() {
+        guard let timestamp = pendingBrightnessEventTimestamp else { return }
+
+        guard Date.timeIntervalSinceReferenceDate - timestamp < 2.5 else {
+            pendingBrightnessEventTimestamp = nil
+            return
+        }
+
+        guard canShowBrightnessStatusAnimation else { return }
+
+        pendingBrightnessEventTimestamp = nil
+        startBrightnessStatusAnimation()
+    }
+
+    private func startBrightnessStatusAnimation() {
+        let collapseDuration = 0.34
+
+        if status == .brightnessCollapse {
+            return
+        }
+
+        if status == .brightnessPreview {
+            scheduleBrightnessReturn(
+                returnStatus: brightnessReturnStatus,
+                collapseDuration: collapseDuration
+            )
+            return
+        }
+
+        brightnessStatusTask?.cancel()
+        focusStatusTask?.cancel()
+        volumeStatusTask?.cancel()
+        autoExpandMusicTask?.cancel()
+        showMusicVolumeControl = false
+        pendingFocusEventTimestamp = nil
+        pendingVolumeEventTimestamp = nil
+
+        if status == .focusPreview || status == .focusCollapse {
+            focusCollapseShowsMusic = true
+            status = focusReturnStatus
+        }
+
+        if status == .volumePreview || status == .volumeCollapse {
+            volumeCollapseShowsMusic = true
+            status = volumeReturnStatus
+        }
+
+        if status != .brightnessPreview && status != .brightnessCollapse {
+            brightnessReturnStatus = status
+        }
+
+        let canCollapseFromMusic =
+            dynamicManager.currentModule == .music &&
+            settingsManager.showMusic &&
+            musicManager.hasNowPlayingContent
+
+        brightnessCollapseShowsMusic =
+            canCollapseFromMusic &&
+            (status != .brightnessCollapse || brightnessCollapseShowsMusic)
+
+        withAnimation(.smooth(duration: collapseDuration, extraBounce: 0)) {
+            status = .brightnessCollapse
+        }
+
+        let returnStatus = brightnessReturnStatus
+
+        brightnessStatusTask = Task {
+            try? await Task.sleep(for: .seconds(collapseDuration))
+            guard !Task.isCancelled else { return }
+
+            await MainActor.run {
+                guard status == .brightnessCollapse else { return }
+
+                brightnessCollapseShowsMusic = false
+
+                withAnimation(.smooth(duration: 0.42, extraBounce: 0)) {
+                    status = .brightnessPreview
+                }
+            }
+
+            await MainActor.run {
+                brightnessStatusTask = nil
+                scheduleBrightnessReturn(
+                    returnStatus: returnStatus,
+                    collapseDuration: collapseDuration
+                )
+            }
+        }
+    }
+
+    func scheduleBrightnessReturn(
+        returnStatus: IslandStatus,
+        collapseDuration: Double
+    ) {
+        guard brightnessStatusTask == nil else { return }
+
+        brightnessStatusTask = Task {
+            while !Task.isCancelled {
+                let elapsed = Date.timeIntervalSinceReferenceDate - lastBrightnessStatusEventTime
+                let remainingDelay = max(0, 1.3 - elapsed)
+
+                if remainingDelay <= 0 {
+                    break
+                }
+
+                try? await Task.sleep(for: .seconds(remainingDelay))
+            }
+
+            guard !Task.isCancelled else {
+                brightnessStatusTask = nil
+                return
+            }
+
+            await MainActor.run {
+                guard status == .brightnessPreview else { return }
+
+                brightnessCollapseShowsMusic = false
+
+                withAnimation(.smooth(duration: collapseDuration, extraBounce: 0)) {
+                    status = .brightnessCollapse
+                }
+            }
+
+            try? await Task.sleep(for: .seconds(collapseDuration))
+            guard !Task.isCancelled else { return }
+
+            await MainActor.run {
+                guard status == .brightnessCollapse else { return }
+
+                brightnessCollapseShowsMusic = true
+                brightnessStatusTask = nil
+
+                withAnimation(.smooth(duration: 0.42, extraBounce: 0)) {
+                    status = returnStatus
+                }
+
+                if (returnStatus == .opened || returnStatus == .musicPreview) && !isPointerInsideIsland {
+                    scheduleAutoClose(after: 2.0)
+                }
+            }
+        }
+    }
+
+    func handleVolumeEvent() {
+        guard settingsManager.showSoundStatus else { return }
+
+        lastVolumeStatusEventTime = Date.timeIntervalSinceReferenceDate
+
+        guard canShowVolumeStatusAnimation else {
+            queuePendingVolumeEvent()
+            return
+        }
+
+        pendingVolumeEventTimestamp = nil
+        startVolumeStatusAnimation()
+    }
+
+    var canShowVolumeStatusAnimation: Bool {
+        animationsEnabled && settingsManager.showSoundStatus
+    }
+
+    func queuePendingVolumeEvent() {
+        pendingVolumeEventTimestamp = Date.timeIntervalSinceReferenceDate
+    }
+
+    func playPendingVolumeEventIfReady() {
+        guard let timestamp = pendingVolumeEventTimestamp else { return }
+
+        guard Date.timeIntervalSinceReferenceDate - timestamp < 2.5 else {
+            pendingVolumeEventTimestamp = nil
+            return
+        }
+
+        guard canShowVolumeStatusAnimation else { return }
+
+        pendingVolumeEventTimestamp = nil
+        startVolumeStatusAnimation()
+    }
+
+    private func startVolumeStatusAnimation() {
+        let collapseDuration = 0.34
+
+        if status == .volumeCollapse {
+            return
+        }
+
+        if status == .volumePreview {
+            scheduleVolumeReturn(
+                returnStatus: volumeReturnStatus,
+                collapseDuration: collapseDuration
+            )
+            return
+        }
+
+        volumeStatusTask?.cancel()
+        focusStatusTask?.cancel()
+        brightnessStatusTask?.cancel()
+        autoExpandMusicTask?.cancel()
+        showMusicVolumeControl = false
+        pendingFocusEventTimestamp = nil
+        pendingBrightnessEventTimestamp = nil
+
+        if status == .focusPreview || status == .focusCollapse {
+            focusCollapseShowsMusic = true
+            status = focusReturnStatus
+        }
+
+        if status == .brightnessPreview || status == .brightnessCollapse {
+            brightnessCollapseShowsMusic = true
+            status = brightnessReturnStatus
+        }
+
+        if status != .volumePreview && status != .volumeCollapse {
+            volumeReturnStatus = status
+        }
+
+        let canCollapseFromMusic =
+            dynamicManager.currentModule == .music &&
+            settingsManager.showMusic &&
+            musicManager.hasNowPlayingContent
+
+        volumeCollapseShowsMusic =
+            canCollapseFromMusic &&
+            (status != .volumeCollapse || volumeCollapseShowsMusic)
+
+        withAnimation(.smooth(duration: collapseDuration, extraBounce: 0)) {
+            status = .volumeCollapse
+        }
+
+        let returnStatus = volumeReturnStatus
+
+        volumeStatusTask = Task {
+            try? await Task.sleep(for: .seconds(collapseDuration))
+            guard !Task.isCancelled else { return }
+
+            await MainActor.run {
+                guard status == .volumeCollapse else { return }
+
+                volumeCollapseShowsMusic = false
+
+                withAnimation(.smooth(duration: 0.42, extraBounce: 0)) {
+                    status = .volumePreview
+                }
+            }
+
+            await MainActor.run {
+                volumeStatusTask = nil
+                scheduleVolumeReturn(
+                    returnStatus: returnStatus,
+                    collapseDuration: collapseDuration
+                )
+            }
+        }
+    }
+
+    func scheduleVolumeReturn(
+        returnStatus: IslandStatus,
+        collapseDuration: Double
+    ) {
+        guard volumeStatusTask == nil else { return }
+
+        volumeStatusTask = Task {
+            while !Task.isCancelled {
+                let elapsed = Date.timeIntervalSinceReferenceDate - lastVolumeStatusEventTime
+                let remainingDelay = max(0, 1.3 - elapsed)
+
+                if remainingDelay <= 0 {
+                    break
+                }
+
+                try? await Task.sleep(for: .seconds(remainingDelay))
+            }
+
+            guard !Task.isCancelled else {
+                volumeStatusTask = nil
+                return
+            }
+
+            await MainActor.run {
+                guard status == .volumePreview else { return }
+
+                volumeCollapseShowsMusic = false
+
+                withAnimation(.smooth(duration: collapseDuration, extraBounce: 0)) {
+                    status = .volumeCollapse
+                }
+            }
+
+            try? await Task.sleep(for: .seconds(collapseDuration))
+            guard !Task.isCancelled else { return }
+
+            await MainActor.run {
+                guard status == .volumeCollapse else { return }
+
+                volumeCollapseShowsMusic = true
+                volumeStatusTask = nil
+
+                withAnimation(.smooth(duration: 0.42, extraBounce: 0)) {
+                    status = returnStatus
+                }
+
+                if (returnStatus == .opened || returnStatus == .musicPreview) && !isPointerInsideIsland {
+                    scheduleAutoClose(after: 2.0)
+                }
+            }
+        }
+    }
+
     func hideFocusStatusPreview(animated: Bool = true) {
         focusStatusTask?.cancel()
         focusStatusTask = nil
@@ -234,6 +583,44 @@ extension ContentView {
         let updates = {
             focusCollapseShowsMusic = true
             status = focusReturnStatus
+        }
+
+        if animated {
+            withAnimation(animation, updates)
+        } else {
+            updates()
+        }
+    }
+
+    func hideBrightnessStatusPreview(animated: Bool = true) {
+        brightnessStatusTask?.cancel()
+        brightnessStatusTask = nil
+        pendingBrightnessEventTimestamp = nil
+
+        guard status == .brightnessPreview || status == .brightnessCollapse else { return }
+
+        let updates = {
+            brightnessCollapseShowsMusic = true
+            status = brightnessReturnStatus
+        }
+
+        if animated {
+            withAnimation(animation, updates)
+        } else {
+            updates()
+        }
+    }
+
+    func hideVolumeStatusPreview(animated: Bool = true) {
+        volumeStatusTask?.cancel()
+        volumeStatusTask = nil
+        pendingVolumeEventTimestamp = nil
+
+        guard status == .volumePreview || status == .volumeCollapse else { return }
+
+        let updates = {
+            volumeCollapseShowsMusic = true
+            status = volumeReturnStatus
         }
 
         if animated {

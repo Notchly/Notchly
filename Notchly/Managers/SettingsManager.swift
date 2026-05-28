@@ -9,12 +9,45 @@ import Foundation
 import Combine
 import ServiceManagement
 
+enum DisplayTarget: String, CaseIterable {
+    case main
+    case builtIn
+
+    var title: String {
+        switch self {
+        case .main:
+            return "Main display"
+        case .builtIn:
+            return "Built in display"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .main:
+            return "Follow the active main screen."
+        case .builtIn:
+            return "Prefer the MacBook display."
+        }
+    }
+
+    var symbolName: String {
+        switch self {
+        case .main:
+            return "display"
+        case .builtIn:
+            return "laptopcomputer"
+        }
+    }
+}
+
 @MainActor
 final class SettingsManager: ObservableObject {
     private enum Defaults {
         static let showBattery = true
         static let showMusic = true
-        static let showOnPrimaryDisplayOnly = true
+        static let islandWidth = 318.0
+        static let displayTarget = DisplayTarget.builtIn
         static let lowBatteryThreshold = 20
         static let musicPreviewDuration = 2.0
         static let enableSpotifyAppleScriptControl = false
@@ -22,6 +55,16 @@ final class SettingsManager: ObservableObject {
         static let launchAtLogin = false
         static let enableLockSound = true
         static let showFocusAnimations = true
+        static let focusAnimationDuration = 2.0
+        static let hideFocusLabel = false
+        static let showBrightnessStatus = true
+        static let showBrightnessLine = true
+        static let brightnessLineWidth = 36.0
+        static let showBrightnessPercent = true
+        static let showSoundStatus = true
+        static let showSoundLine = true
+        static let soundLineWidth = 36.0
+        static let showSoundPercent = true
     }
 
     @Published var showBattery: Bool {
@@ -32,8 +75,12 @@ final class SettingsManager: ObservableObject {
         didSet { UserDefaults.standard.set(showMusic, forKey: "showMusic") }
     }
 
-    @Published var showOnPrimaryDisplayOnly: Bool {
-        didSet { UserDefaults.standard.set(showOnPrimaryDisplayOnly, forKey: "showOnPrimaryDisplayOnly") }
+    @Published var islandWidth: Double {
+        didSet { UserDefaults.standard.set(islandWidth, forKey: "islandWidth") }
+    }
+
+    @Published var displayTarget: DisplayTarget {
+        didSet { UserDefaults.standard.set(displayTarget.rawValue, forKey: "displayTarget") }
     }
 
     @Published var lowBatteryThreshold: Int {
@@ -67,10 +114,51 @@ final class SettingsManager: ObservableObject {
         didSet { UserDefaults.standard.set(showFocusAnimations, forKey: "showFocusAnimations") }
     }
 
+    @Published var focusAnimationDuration: Double {
+        didSet { UserDefaults.standard.set(focusAnimationDuration, forKey: "focusAnimationDuration") }
+    }
+
+    @Published var hideFocusLabel: Bool {
+        didSet { UserDefaults.standard.set(hideFocusLabel, forKey: "hideFocusLabel") }
+    }
+
+    @Published var showBrightnessStatus: Bool {
+        didSet { UserDefaults.standard.set(showBrightnessStatus, forKey: "showBrightnessStatus") }
+    }
+
+    @Published var showBrightnessLine: Bool {
+        didSet { UserDefaults.standard.set(showBrightnessLine, forKey: "showBrightnessLine") }
+    }
+
+    @Published var brightnessLineWidth: Double {
+        didSet { UserDefaults.standard.set(brightnessLineWidth, forKey: "brightnessLineWidth") }
+    }
+
+    @Published var showBrightnessPercent: Bool {
+        didSet { UserDefaults.standard.set(showBrightnessPercent, forKey: "showBrightnessPercent") }
+    }
+
+    @Published var showSoundStatus: Bool {
+        didSet { UserDefaults.standard.set(showSoundStatus, forKey: "showSoundStatus") }
+    }
+
+    @Published var showSoundLine: Bool {
+        didSet { UserDefaults.standard.set(showSoundLine, forKey: "showSoundLine") }
+    }
+
+    @Published var soundLineWidth: Double {
+        didSet { UserDefaults.standard.set(soundLineWidth, forKey: "soundLineWidth") }
+    }
+
+    @Published var showSoundPercent: Bool {
+        didSet { UserDefaults.standard.set(showSoundPercent, forKey: "showSoundPercent") }
+    }
+
     init() {
         self.showBattery = UserDefaults.standard.object(forKey: "showBattery") as? Bool ?? Defaults.showBattery
         self.showMusic = UserDefaults.standard.object(forKey: "showMusic") as? Bool ?? Defaults.showMusic
-        self.showOnPrimaryDisplayOnly = UserDefaults.standard.object(forKey: "showOnPrimaryDisplayOnly") as? Bool ?? Defaults.showOnPrimaryDisplayOnly
+        self.islandWidth = UserDefaults.standard.object(forKey: "islandWidth") as? Double ?? Defaults.islandWidth
+        self.displayTarget = Self.loadDisplayTarget()
         self.lowBatteryThreshold = UserDefaults.standard.object(forKey: "lowBatteryThreshold") as? Int ?? Defaults.lowBatteryThreshold
         self.musicPreviewDuration = UserDefaults.standard.object(forKey: "musicPreviewDuration") as? Double ?? Defaults.musicPreviewDuration
         self.enableSpotifyAppleScriptControl = UserDefaults.standard.object(forKey: "enableSpotifyAppleScriptControl") as? Bool ?? Defaults.enableSpotifyAppleScriptControl
@@ -81,6 +169,16 @@ final class SettingsManager: ObservableObject {
         self.launchAtLogin = savedLaunchAtLogin ?? systemLaunchAtLogin
         self.enableLockSound = UserDefaults.standard.object(forKey: "enableLockSound") as? Bool ?? Defaults.enableLockSound
         self.showFocusAnimations = UserDefaults.standard.object(forKey: "showFocusAnimations") as? Bool ?? Defaults.showFocusAnimations
+        self.focusAnimationDuration = UserDefaults.standard.object(forKey: "focusAnimationDuration") as? Double ?? Defaults.focusAnimationDuration
+        self.hideFocusLabel = UserDefaults.standard.object(forKey: "hideFocusLabel") as? Bool ?? Defaults.hideFocusLabel
+        self.showBrightnessStatus = UserDefaults.standard.object(forKey: "showBrightnessStatus") as? Bool ?? Defaults.showBrightnessStatus
+        self.showBrightnessLine = UserDefaults.standard.object(forKey: "showBrightnessLine") as? Bool ?? Defaults.showBrightnessLine
+        self.brightnessLineWidth = UserDefaults.standard.object(forKey: "brightnessLineWidth") as? Double ?? Defaults.brightnessLineWidth
+        self.showBrightnessPercent = UserDefaults.standard.object(forKey: "showBrightnessPercent") as? Bool ?? Defaults.showBrightnessPercent
+        self.showSoundStatus = UserDefaults.standard.object(forKey: "showSoundStatus") as? Bool ?? Defaults.showSoundStatus
+        self.showSoundLine = UserDefaults.standard.object(forKey: "showSoundLine") as? Bool ?? Defaults.showSoundLine
+        self.soundLineWidth = UserDefaults.standard.object(forKey: "soundLineWidth") as? Double ?? Defaults.soundLineWidth
+        self.showSoundPercent = UserDefaults.standard.object(forKey: "showSoundPercent") as? Bool ?? Defaults.showSoundPercent
     }
 
     func refreshLaunchAtLoginStatus() {
@@ -88,15 +186,35 @@ final class SettingsManager: ObservableObject {
     }
 
     func resetGeneralSettings() {
-        showOnPrimaryDisplayOnly = Defaults.showOnPrimaryDisplayOnly
+        islandWidth = Defaults.islandWidth
+        displayTarget = Defaults.displayTarget
         launchAtLogin = Defaults.launchAtLogin
         enableLockSound = Defaults.enableLockSound
+    }
+
+    func resetFocusSettings() {
         showFocusAnimations = Defaults.showFocusAnimations
+        focusAnimationDuration = Defaults.focusAnimationDuration
+        hideFocusLabel = Defaults.hideFocusLabel
     }
 
     func resetBatterySettings() {
         showBattery = Defaults.showBattery
         lowBatteryThreshold = Defaults.lowBatteryThreshold
+    }
+
+    func resetBrightnessSettings() {
+        showBrightnessStatus = Defaults.showBrightnessStatus
+        showBrightnessLine = Defaults.showBrightnessLine
+        brightnessLineWidth = Defaults.brightnessLineWidth
+        showBrightnessPercent = Defaults.showBrightnessPercent
+    }
+
+    func resetSoundSettings() {
+        showSoundStatus = Defaults.showSoundStatus
+        showSoundLine = Defaults.showSoundLine
+        soundLineWidth = Defaults.soundLineWidth
+        showSoundPercent = Defaults.showSoundPercent
     }
 
     func resetMusicSettings() {
@@ -119,5 +237,18 @@ final class SettingsManager: ObservableObject {
                 launchAtLogin = actual
             }
         }
+    }
+
+    private static func loadDisplayTarget() -> DisplayTarget {
+        if let rawValue = UserDefaults.standard.string(forKey: "displayTarget"),
+           let displayTarget = DisplayTarget(rawValue: rawValue) {
+            return displayTarget
+        }
+
+        if let legacyPrimaryOnly = UserDefaults.standard.object(forKey: "showOnPrimaryDisplayOnly") as? Bool {
+            return legacyPrimaryOnly ? .builtIn : .main
+        }
+
+        return Defaults.displayTarget
     }
 }

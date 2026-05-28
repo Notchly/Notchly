@@ -11,14 +11,23 @@ import AppKit
 struct LockScreenMusicPlayerView: View {
     @ObservedObject var musicManager: MusicManager
     let isVisible: Bool
+    let isArtworkExpanded: Bool
+    let onExpandArtwork: () -> Void
+    let onCollapseArtwork: () -> Void
 
     @State private var playPauseBounce = false
     @State private var previousButtonBounce = false
     @State private var nextButtonBounce = false
     @State private var artworkSlideDirection: CGFloat = 1
+    @State private var playPauseBounceTask: Task<Void, Never>?
+    @State private var skipBounceTask: Task<Void, Never>?
 
     private let artworkSize: CGFloat = 52
     private let artworkCornerRadius: CGFloat = 6.5
+    private let playerWidth: CGFloat = 405
+    private let playerHeight: CGFloat = 168
+    private let expandedArtworkWidth: CGFloat = 405
+    private let expandedArtworkHeight: CGFloat = 405
 
     private var isLivestream: Bool {
         musicManager.durationMs <= 0
@@ -59,89 +68,148 @@ struct LockScreenMusicPlayerView: View {
 
     var body: some View {
         VStack(spacing: 16) {
-            HStack(alignment: .top, spacing: 10) {
-                artworkView
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(displayTitle)
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.82)
-
-                    Text(displayArtist.isEmpty ? "Music" : displayArtist)
-                        .font(.system(size: 13, weight: .regular))
-                        .foregroundStyle(.white.opacity(0.62))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.82)
-                }
-                .padding(.top, 7)
-
-                Spacer(minLength: 12)
-
-                Button(action: musicManager.openCurrentPlayerApp) {
-                    EqualizerGlyph(
-                        isActive: isVisible && musicManager.isPlaying,
-                        color: .white.opacity(0.5)
-                    )
-                        .frame(width: 24, height: 24)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(IslandControlButtonStyle())
-                .padding(.top, 5)
-            }
-
+            metadataRow
             progressView
-
-            HStack(spacing: 44) {
-                Button {
-                    previousTrack()
-                } label: {
-                    Image(systemName: "backward.fill")
-                        .font(.system(size: 27, weight: .bold))
-                        .frame(width: 40, height: 40)
-                        .foregroundStyle(.white)
-                        .scaleEffect(previousButtonBounce ? 1.08 : 1.0)
-                        .animation(.interactiveSpring(duration: 0.2, extraBounce: 0.18), value: previousButtonBounce)
-                }
-                .buttonStyle(IslandControlButtonStyle())
-                .disabled(isLivestream)
-                .opacity(isLivestream ? 0.4 : 1.0)
-
-                Button(action: togglePlay) {
-                    Image(systemName: musicManager.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 32, weight: .bold))
-                        .frame(width: 42, height: 40)
-                        .foregroundStyle(.white)
-                        .scaleEffect(playPauseBounce ? 1.08 : 1.0)
-                        .animation(.interactiveSpring(duration: 0.22, extraBounce: 0.22), value: playPauseBounce)
-                        .contentTransition(.symbolEffect(.replace))
-                }
-                .buttonStyle(IslandControlButtonStyle(pressedScale: 0.9))
-
-                Button {
-                    nextTrack()
-                } label: {
-                    Image(systemName: "forward.fill")
-                        .font(.system(size: 27, weight: .bold))
-                        .frame(width: 40, height: 40)
-                        .foregroundStyle(.white)
-                        .scaleEffect(nextButtonBounce ? 1.08 : 1.0)
-                        .animation(.interactiveSpring(duration: 0.2, extraBounce: 0.18), value: nextButtonBounce)
-                }
-                .buttonStyle(IslandControlButtonStyle())
-                .disabled(isLivestream)
-                .opacity(isLivestream ? 0.4 : 1.0)
-            }
+            controlsRow
         }
         .padding(.horizontal, 19)
         .padding(.top, 14)
         .padding(.bottom, 12)
-        .frame(width: 405, height: 168)
+        .frame(width: playerWidth, height: playerHeight)
         .background {
             playerBackground
         }
+        .overlay(alignment: .topLeading) {
+            expandedArtworkView
+                .offset(x: 0, y: -expandedArtworkHeight - 12)
+        }
         .shadow(color: .black.opacity(0.16), radius: 24, y: 13)
+        .animation(.spring(response: 0.34, dampingFraction: 0.9), value: isArtworkExpanded)
+        .onDisappear {
+            playPauseBounceTask?.cancel()
+            playPauseBounceTask = nil
+            skipBounceTask?.cancel()
+            skipBounceTask = nil
+        }
+    }
+
+    @ViewBuilder
+    private var expandedArtworkView: some View {
+        if isArtworkExpanded, let artwork = musicManager.artworkImage {
+            Button {
+                onCollapseArtwork()
+            } label: {
+                Image(nsImage: artwork)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: expandedArtworkWidth, height: expandedArtworkHeight)
+                    .clipShape(RoundedRectangle(cornerRadius: 23, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 23, style: .continuous)
+                            .strokeBorder(Color.white.opacity(0.16), lineWidth: 1)
+                    }
+                    .shadow(color: .black.opacity(0.28), radius: 24, y: 16)
+                    .contentShape(RoundedRectangle(cornerRadius: 23, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .transition(
+                .asymmetric(
+                    insertion: .scale(scale: 0.14, anchor: .bottomLeading)
+                        .combined(with: .offset(x: 19, y: expandedArtworkHeight * 0.42))
+                        .combined(with: .opacity),
+                    removal: .scale(scale: 0.14, anchor: .bottomLeading)
+                        .combined(with: .offset(x: 19, y: expandedArtworkHeight * 0.42))
+                        .combined(with: .opacity)
+                )
+            )
+        }
+    }
+
+    private var metadataRow: some View {
+        HStack(alignment: .top, spacing: 10) {
+            if !isArtworkExpanded {
+                Button {
+                    onExpandArtwork()
+                } label: {
+                    artworkView
+                }
+                .buttonStyle(IslandControlButtonStyle(pressedScale: 0.96))
+                .disabled(musicManager.artworkImage == nil)
+                .transition(.scale(scale: 0.92).combined(with: .opacity))
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(displayTitle)
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
+
+                Text(displayArtist.isEmpty ? "Music" : displayArtist)
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundStyle(.white.opacity(0.62))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, 7)
+
+            Spacer(minLength: 12)
+
+            Button(action: musicManager.openCurrentPlayerApp) {
+                EqualizerGlyph(
+                    isActive: isVisible && musicManager.isPlaying,
+                    color: .white.opacity(0.5)
+                )
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(IslandControlButtonStyle())
+            .padding(.top, isArtworkExpanded ? 0 : 5)
+        }
+    }
+
+    private var controlsRow: some View {
+        HStack(spacing: 44) {
+            Button {
+                previousTrack()
+            } label: {
+                Image(systemName: "backward.fill")
+                    .font(.system(size: 27, weight: .bold))
+                    .frame(width: 40, height: 40)
+                    .foregroundStyle(.white)
+                    .scaleEffect(previousButtonBounce ? 1.08 : 1.0)
+                    .animation(.interactiveSpring(duration: 0.2, extraBounce: 0.18), value: previousButtonBounce)
+            }
+            .buttonStyle(IslandControlButtonStyle())
+            .disabled(isLivestream)
+            .opacity(isLivestream ? 0.4 : 1.0)
+
+            Button(action: togglePlay) {
+                Image(systemName: musicManager.isPlaying ? "pause.fill" : "play.fill")
+                    .font(.system(size: 32, weight: .bold))
+                    .frame(width: 42, height: 40)
+                    .foregroundStyle(.white)
+                    .scaleEffect(playPauseBounce ? 1.08 : 1.0)
+                    .animation(.interactiveSpring(duration: 0.22, extraBounce: 0.22), value: playPauseBounce)
+                    .contentTransition(.symbolEffect(.replace))
+            }
+            .buttonStyle(IslandControlButtonStyle(pressedScale: 0.9))
+
+            Button {
+                nextTrack()
+            } label: {
+                Image(systemName: "forward.fill")
+                    .font(.system(size: 27, weight: .bold))
+                    .frame(width: 40, height: 40)
+                    .foregroundStyle(.white)
+                    .scaleEffect(nextButtonBounce ? 1.08 : 1.0)
+                    .animation(.interactiveSpring(duration: 0.2, extraBounce: 0.18), value: nextButtonBounce)
+            }
+            .buttonStyle(IslandControlButtonStyle())
+            .disabled(isLivestream)
+            .opacity(isLivestream ? 0.4 : 1.0)
+        }
     }
 
     private var playerBackground: some View {
@@ -272,11 +340,15 @@ struct LockScreenMusicPlayerView: View {
     }
 
     private func togglePlay() {
+        playPauseBounceTask?.cancel()
         playPauseBounce = true
         musicManager.togglePlay()
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+        playPauseBounceTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(0.18))
+            guard !Task.isCancelled else { return }
             playPauseBounce = false
+            playPauseBounceTask = nil
         }
     }
 
@@ -291,6 +363,7 @@ struct LockScreenMusicPlayerView: View {
     }
 
     private func animateSkip(direction: CGFloat) {
+        skipBounceTask?.cancel()
         artworkSlideDirection = direction
 
         withAnimation(.interactiveSpring(duration: 0.2, extraBounce: 0.18)) {
@@ -301,7 +374,10 @@ struct LockScreenMusicPlayerView: View {
             }
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+        skipBounceTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(0.18))
+            guard !Task.isCancelled else { return }
+
             withAnimation(.interactiveSpring(duration: 0.2, extraBounce: 0.08)) {
                 if direction < 0 {
                     previousButtonBounce = false
@@ -309,6 +385,8 @@ struct LockScreenMusicPlayerView: View {
                     nextButtonBounce = false
                 }
             }
+
+            skipBounceTask = nil
         }
     }
 
