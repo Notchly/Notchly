@@ -58,8 +58,12 @@ final class BatteryManager: ObservableObject {
               let description = IOPSGetPowerSourceDescription(snapshot, source)?.takeUnretainedValue() as? [String: Any] else {
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
-                self.isBatteryAvailable = false
-                self.powerSource = "Unknown"
+                if self.isBatteryAvailable {
+                    self.isBatteryAvailable = false
+                }
+                if self.powerSource != "Unknown" {
+                    self.powerSource = "Unknown"
+                }
             }
             return
         }
@@ -72,10 +76,20 @@ final class BatteryManager: ObservableObject {
 
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            self.batteryLevel = percent
-            self.isCharging = charging || powerSourceState == kIOPSACPowerValue
-            self.isBatteryAvailable = true
-            self.powerSource = powerSourceState
+            let nextIsCharging = charging || powerSourceState == kIOPSACPowerValue
+
+            if self.batteryLevel != percent {
+                self.batteryLevel = percent
+            }
+            if self.isCharging != nextIsCharging {
+                self.isCharging = nextIsCharging
+            }
+            if !self.isBatteryAvailable {
+                self.isBatteryAvailable = true
+            }
+            if self.powerSource != powerSourceState {
+                self.powerSource = powerSourceState
+            }
         }
     }
 }

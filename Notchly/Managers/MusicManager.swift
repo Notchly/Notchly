@@ -192,25 +192,43 @@ final class MusicManager: ObservableObject {
         currentTrackIdentity = newTrackIdentity
         currentPlayerBundleIdentifier = bundleIdentifier
 
-        trackTitle = newTrackTitle
-        artistName = newArtistName
-        albumTitle = newAlbumTitle
-        isPlaying = playing
-        durationMs = newDurationMs
-        isShuffleEnabled = isShuffleAvailable(for: newSource)
+        if trackTitle != newTrackTitle {
+            trackTitle = newTrackTitle
+        }
+        if artistName != newArtistName {
+            artistName = newArtistName
+        }
+        if albumTitle != newAlbumTitle {
+            albumTitle = newAlbumTitle
+        }
+        if isPlaying != playing {
+            isPlaying = playing
+        }
+        if durationMs != newDurationMs {
+            durationMs = newDurationMs
+        }
+
+        let newShuffleEnabled = isShuffleAvailable(for: newSource)
             ? resolvedShuffleEnabled((payload.shuffleMode ?? .off) != .off)
             : false
+        if isShuffleEnabled != newShuffleEnabled {
+            isShuffleEnabled = newShuffleEnabled
+        }
 
         basePlaybackPosition = elapsedMs
         baseSyncDate = Date()
         currentPlaybackRate = payload.playbackRate ?? (playing ? 1.0 : 0.0)
 
-        if !isPreviewSeeking {
+        if !isPreviewSeeking && playbackPosition != elapsedMs {
             playbackPosition = elapsedMs
         }
 
-        sourceName = newSourceName
-        currentSource = newSource
+        if sourceName != newSourceName {
+            sourceName = newSourceName
+        }
+        if currentSource != newSource {
+            currentSource = newSource
+        }
 
         if trackChanged {
             updateArtwork(from: payload.artwork)
@@ -249,20 +267,33 @@ final class MusicManager: ObservableObject {
     @MainActor
     private func updateArtwork(from artwork: NSImage?) {
         guard let artwork else {
-            artworkImage = nil
-            artworkAvailable = false
-            waveformColor = .white
+            if artworkImage != nil {
+                artworkImage = nil
+            }
+            if artworkAvailable {
+                artworkAvailable = false
+            }
+            if waveformColor != .white {
+                waveformColor = .white
+            }
             return
         }
 
         let preparedArtwork = artwork.resizedForArtwork()
         artworkImage = preparedArtwork
-        artworkAvailable = true
+        if !artworkAvailable {
+            artworkAvailable = true
+        }
 
         if let avgColor = preparedArtwork.averageColor?.boostedForWaveform {
-            waveformColor = Color(nsColor: avgColor)
+            let nextWaveformColor = Color(nsColor: avgColor)
+            if waveformColor != nextWaveformColor {
+                waveformColor = nextWaveformColor
+            }
         } else {
-            waveformColor = .white
+            if waveformColor != .white {
+                waveformColor = .white
+            }
         }
     }
 
@@ -507,15 +538,14 @@ final class MusicManager: ObservableObject {
     private func startVolumePolling() {
         guard volumePollTimer == nil else { return }
 
-        volumePollTimer = Timer.scheduledTimer(withTimeInterval: volumePollInterval, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: volumePollInterval, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 self?.refreshOutputVolume(emitsEvent: true)
             }
         }
 
-        if let volumePollTimer {
-            RunLoop.main.add(volumePollTimer, forMode: .common)
-        }
+        volumePollTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
     }
 
     @MainActor
@@ -554,24 +584,48 @@ final class MusicManager: ObservableObject {
 
     @MainActor
     private func clearPlaybackState() {
-        isPlaying = false
-        trackTitle = ""
-        artistName = ""
-        albumTitle = ""
-        playbackPosition = 0
-        durationMs = 0
-        sourceName = ""
-        currentSource = .none
-        artworkAvailable = false
-        artworkImage = nil
-        waveformColor = .white
+        if isPlaying {
+            isPlaying = false
+        }
+        if !trackTitle.isEmpty {
+            trackTitle = ""
+        }
+        if !artistName.isEmpty {
+            artistName = ""
+        }
+        if !albumTitle.isEmpty {
+            albumTitle = ""
+        }
+        if playbackPosition != 0 {
+            playbackPosition = 0
+        }
+        if durationMs != 0 {
+            durationMs = 0
+        }
+        if !sourceName.isEmpty {
+            sourceName = ""
+        }
+        if currentSource != .none {
+            currentSource = .none
+        }
+        if artworkAvailable {
+            artworkAvailable = false
+        }
+        if artworkImage != nil {
+            artworkImage = nil
+        }
+        if waveformColor != .white {
+            waveformColor = .white
+        }
         basePlaybackPosition = 0
         baseSyncDate = nil
         currentPlaybackRate = 0
         isPreviewSeeking = false
         currentTrackIdentity = ""
         currentPlayerBundleIdentifier = ""
-        isShuffleEnabled = false
+        if isShuffleEnabled {
+            isShuffleEnabled = false
+        }
         ignoreTransientZeroProgressUntil = nil
         pendingShuffleState = nil
         pendingShuffleStateUntil = nil

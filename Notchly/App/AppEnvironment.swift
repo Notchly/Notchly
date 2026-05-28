@@ -65,7 +65,9 @@ final class BrightnessManager: ObservableObject {
         guard pollingTask == nil else { return }
 
         let initialLevel = readBrightness() ?? 0
-        brightnessLevel = initialLevel
+        if brightnessLevel != initialLevel {
+            brightnessLevel = initialLevel
+        }
         lastPublishedLevel = initialLevel
 
         pollingTask = Task { @MainActor [weak self] in

@@ -56,8 +56,10 @@ struct MarqueeText: View {
 
     var body: some View {
         GeometryReader { geo in
+            let renderedText = displayText
+
             ZStack(alignment: .leading) {
-                Text(displayText)
+                Text(renderedText)
                     .font(font)
                     .foregroundStyle(Color(nsColor: color))
                     .lineLimit(1)
@@ -67,19 +69,24 @@ struct MarqueeText: View {
                         GeometryReader { proxy in
                             Color.clear
                                 .onAppear {
-                                    textWidth = proxy.size.width
-                                    containerWidth = geo.size.width
-                                    startAnimation()
+                                    updateMeasuredSizes(
+                                        textWidth: proxy.size.width,
+                                        containerWidth: geo.size.width,
+                                        forceRestart: true
+                                    )
                                 }
                                 .onChange(of: proxy.size.width) { _, newValue in
-                                    textWidth = newValue
-                                    containerWidth = geo.size.width
-                                    startAnimation()
+                                    updateMeasuredSizes(
+                                        textWidth: newValue,
+                                        containerWidth: geo.size.width
+                                    )
                                 }
-                                .onChange(of: displayText) { _, _ in
-                                    textWidth = proxy.size.width
-                                    containerWidth = geo.size.width
-                                    startAnimation()
+                                .onChange(of: renderedText) { _, _ in
+                                    updateMeasuredSizes(
+                                        textWidth: proxy.size.width,
+                                        containerWidth: geo.size.width,
+                                        forceRestart: true
+                                    )
                                 }
                         }
                     )
@@ -93,12 +100,30 @@ struct MarqueeText: View {
         }
     }
 
+    private func updateMeasuredSizes(
+        textWidth nextTextWidth: CGFloat,
+        containerWidth nextContainerWidth: CGFloat,
+        forceRestart: Bool = false
+    ) {
+        let changed =
+            abs(textWidth - nextTextWidth) > 0.5 ||
+            abs(containerWidth - nextContainerWidth) > 0.5
+
+        guard changed || forceRestart else { return }
+
+        textWidth = nextTextWidth
+        containerWidth = nextContainerWidth
+        startAnimation()
+    }
+
     private func startAnimation() {
         animationTask?.cancel()
         animationTask = nil
 
         guard textWidth > containerWidth, containerWidth > 0 else {
-            offsetX = 0
+            if offsetX != 0 {
+                offsetX = 0
+            }
             return
         }
 
@@ -132,16 +157,23 @@ struct MarqueeText: View {
         }
 
         let ellipsis = "…"
-        var result = text
+        let characters = Array(text)
+        guard !characters.isEmpty else { return ellipsis }
 
-        while !result.isEmpty {
-            let candidate = String(result.dropLast()) + ellipsis
+        var low = 0
+        var high = max(0, characters.count - 1)
+
+        while low < high {
+            let mid = (low + high + 1) / 2
+            let candidate = String(characters.prefix(mid)) + ellipsis
             if (candidate as NSString).size(withAttributes: attributes).width <= maxWidth {
-                return candidate
+                low = mid
+            } else {
+                high = mid - 1
             }
-            result = String(result.dropLast())
         }
 
-        return ellipsis
+        let candidate = String(characters.prefix(low)) + ellipsis
+        return (candidate as NSString).size(withAttributes: attributes).width <= maxWidth ? candidate : ellipsis
     }
 }

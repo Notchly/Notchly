@@ -98,6 +98,7 @@ struct ContentView: View {
         }
         .onChange(of: status) { _, newValue in
             guard newValue != .opened else { return }
+            guard showMusicVolumeControl else { return }
             showMusicVolumeControl = false
         }
         .onChange(of: focusManager.focusEventID) { _, eventID in
