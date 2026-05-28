@@ -125,6 +125,9 @@ struct ContentView: View {
             guard !isEnabled else { return }
             hideVolumeStatusPreview()
         }
+        .onChange(of: settingsManager.showBattery) { _, isEnabled in
+            handleBatteryVisibilityChange(isEnabled)
+        }
         .animation(.interactiveSpring(duration: 0.32, extraBounce: 0.03), value: isHovered)
         .animation(animation, value: status)
         .animation(.easeInOut(duration: 0.18), value: focusStatusIsActive)
