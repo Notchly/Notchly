@@ -20,7 +20,7 @@ final class SkyLightOverlayController {
     private var lockScreenWindowCloseTask: Task<Void, Never>?
     private var currentScreenID: CGDirectDisplayID?
     private var currentScreen: NSScreen?
-    private var settingsCancellable: AnyCancellable?
+    private var displayTargetCancellable: AnyCancellable?
     private var lockStateCancellable: AnyCancellable?
 
     init(environment: AppEnvironment) {
@@ -38,8 +38,8 @@ final class SkyLightOverlayController {
         screenRefreshTask = nil
         lockScreenWindowCloseTask?.cancel()
         lockScreenWindowCloseTask = nil
-        settingsCancellable?.cancel()
-        settingsCancellable = nil
+        displayTargetCancellable?.cancel()
+        displayTargetCancellable = nil
         lockStateCancellable?.cancel()
         lockStateCancellable = nil
 
@@ -71,12 +71,10 @@ final class SkyLightOverlayController {
     }
 
     private func installSettingsObserver() {
-        guard settingsCancellable == nil else { return }
+        guard displayTargetCancellable == nil else { return }
 
-        settingsCancellable = Publishers.CombineLatest(
-            environment.settingsManager.$displayTarget.removeDuplicates(),
-            environment.settingsManager.$islandWidth.removeDuplicates()
-        )
+        displayTargetCancellable = environment.settingsManager.$displayTarget
+            .removeDuplicates()
             .dropFirst()
             .sink { [weak self] _ in
                 Task { @MainActor [weak self] in
@@ -237,7 +235,7 @@ final class SkyLightOverlayController {
             brightnessManager: environment.brightnessManager,
             animationsEnabled: true
         )
-        .frame(width: size.width, height: size.height, alignment: .top)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
         window.contentViewController = NSHostingController(rootView: view)
         SkyLightOperator.shared.delegateWindow(window)
@@ -251,8 +249,7 @@ final class SkyLightOverlayController {
     }
 
     private var islandWindowSize: CGSize {
-        let baseWidth = min(max(CGFloat(environment.settingsManager.islandWidth), 280), 360)
-        return CGSize(width: baseWidth + 96, height: 280)
+        CGSize(width: 456, height: 280)
     }
 
     private func islandWindowFrame(for screen: NSScreen, size: CGSize) -> NSRect {
