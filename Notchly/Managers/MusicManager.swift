@@ -69,6 +69,7 @@ final class MusicManager: ObservableObject {
 
     private let progressTickInterval: TimeInterval = 1.0
     private let volumePollInterval: TimeInterval = 0.22
+    private let outputVolumeEventThreshold = 0.045
     private let activeSourceScanThrottle: TimeInterval = 1.2
 
     init() {
@@ -633,7 +634,7 @@ final class MusicManager: ObservableObject {
         let nextMuted = muted || nextVolume <= 0.01
 
         let currentDisplayVolume = nextMuted ? 0 : nextVolume
-        let volumeChanged = abs(currentDisplayVolume - previousDisplayVolume) >= 0.01
+        let volumeChanged = abs(currentDisplayVolume - previousDisplayVolume) >= outputVolumeEventThreshold
         let muteChanged = previousMuted != nextMuted
 
         if abs(outputVolume - nextVolume) >= 0.001 {
