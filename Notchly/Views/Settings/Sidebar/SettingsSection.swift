@@ -31,7 +31,7 @@ enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
         case .music:
             return "music.note"
         case .battery:
-            return "battery.100"
+            return "bolt.fill"
         case .about:
             return "info.circle.fill"
         }
