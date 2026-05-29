@@ -27,6 +27,8 @@ final class AppEnvironment {
     let settingsManager = SettingsManager()
     let focusManager = FocusManager()
     let brightnessManager = BrightnessManager()
+    let agentEventManager = AgentEventManager()
+    let codexHookIntegrationManager = CodexHookIntegrationManager()
     let lockScreenOverlayModel = LockScreenOverlayModel()
 
     let updaterController = SPUStandardUpdaterController(
@@ -37,14 +39,20 @@ final class AppEnvironment {
 
     lazy var batteryManager = BatteryManager(musicManager: musicManager)
 
+    lazy var chatGPTAppBridgeManager = ChatGPTAppBridgeManager(
+        agentEventManager: agentEventManager
+    )
+
     lazy var dynamicManager = DynamicManager(
         batteryManager: batteryManager,
         musicManager: musicManager,
-        settingsManager: settingsManager
+        settingsManager: settingsManager,
+        agentEventManager: agentEventManager
     )
 
     lazy var settingsWindow = SettingsWindow(
-        settingsManager: settingsManager
+        settingsManager: settingsManager,
+        codexHookIntegrationManager: codexHookIntegrationManager
     )
 }
 

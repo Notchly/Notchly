@@ -45,6 +45,168 @@ extension ContentView {
         }
     }
 
+    func handleAgentEventChange(_ event: AgentEvent?) {
+        if let event {
+            agentMusicHideTask?.cancel()
+            displayedAgentEvent = event
+            beginAgentMusicTransitionIfNeeded()
+        } else {
+            hideAgentMusicContent()
+        }
+    }
+
+    func beginAgentMusicTransitionIfNeeded() {
+        guard canShowAgentOverMusic else { return }
+
+        autoExpandMusicTask?.cancel()
+        focusStatusTask?.cancel()
+        brightnessStatusTask?.cancel()
+        volumeStatusTask?.cancel()
+        showMusicVolumeControl = false
+
+        if !isAgentMusicTransitionActive {
+            agentMusicReturnStatus = status
+        }
+
+        isAgentMusicTransitionActive = true
+        agentCollapseShowsMusic = false
+        showsAgentMusicContent = false
+
+        let collapseDuration = 0.34
+
+        withAnimation(.smooth(duration: collapseDuration, extraBounce: 0)) {
+            status = .agentCollapse
+        }
+
+        Task {
+            try? await Task.sleep(for: .seconds(collapseDuration))
+            guard !Task.isCancelled else { return }
+
+            await MainActor.run {
+                guard isAgentMusicTransitionActive else { return }
+                guard agentEventManager.currentEvent != nil || displayedAgentEvent != nil else { return }
+
+                agentCollapseShowsMusic = false
+
+                withAnimation(.smooth(duration: 0.42, extraBounce: 0)) {
+                    status = .agentPreview
+                }
+
+                withAnimation(.smooth(duration: 0.3, extraBounce: 0).delay(0.08)) {
+                    showsAgentMusicContent = true
+                }
+            }
+        }
+    }
+
+    func hideAgentMusicContent() {
+        guard isAgentMusicTransitionActive else {
+            displayedAgentEvent = nil
+            showsAgentMusicContent = false
+            return
+        }
+
+        agentMusicHideTask?.cancel()
+
+        let collapseDuration = 0.34
+
+        withAnimation(.smooth(duration: 0.22, extraBounce: 0)) {
+            showsAgentMusicContent = false
+        }
+
+        agentMusicHideTask = Task {
+            try? await Task.sleep(for: .milliseconds(220))
+            guard !Task.isCancelled else { return }
+
+            await MainActor.run {
+                guard agentEventManager.currentEvent == nil else { return }
+                guard isAgentMusicTransitionActive else { return }
+
+                agentCollapseShowsMusic = false
+
+                withAnimation(.smooth(duration: collapseDuration, extraBounce: 0)) {
+                    status = .agentCollapse
+                }
+            }
+
+            try? await Task.sleep(for: .seconds(collapseDuration))
+            guard !Task.isCancelled else { return }
+
+            await MainActor.run {
+                guard agentEventManager.currentEvent == nil else { return }
+                agentCollapseShowsMusic = false
+                finishAgentMusicTransitionIfNeeded()
+                displayedAgentEvent = nil
+            }
+        }
+    }
+
+    func finishAgentMusicTransitionIfNeeded() {
+        guard isAgentMusicTransitionActive else { return }
+
+        let targetStatus = agentMusicReturnStatus
+
+        isAgentMusicTransitionActive = false
+
+        guard settingsManager.showMusic,
+              musicManager.hasNowPlayingContent else {
+            withAnimation(animation) {
+                status = .closed
+            }
+            return
+        }
+
+        withAnimation(.smooth(duration: 0.42, extraBounce: 0)) {
+            status = targetStatus
+        }
+
+        if (targetStatus == .opened || targetStatus == .musicPreview) && !isPointerInsideIsland {
+            scheduleAutoClose(after: 2.0)
+        }
+    }
+
+    func openAgentSourceApp(_ event: AgentEvent?) {
+        guard let source = event?.source.lowercased() else { return }
+
+        let workspace = NSWorkspace.shared
+
+        if let runningApp = workspace.runningApplications.first(where: { app in
+            let bundleIdentifier = app.bundleIdentifier?.lowercased() ?? ""
+            let localizedName = app.localizedName?.lowercased() ?? ""
+
+            if source == "chatgpt" {
+                return bundleIdentifier == "com.openai.chat" ||
+                bundleIdentifier.contains("chatgpt") ||
+                localizedName == "chatgpt"
+            }
+
+            if source == "codex" {
+                return bundleIdentifier.contains("codex") ||
+                localizedName == "codex" ||
+                localizedName.contains("codex")
+            }
+
+            return false
+        }) {
+            runningApp.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
+            return
+        }
+
+        let fallbackBundleIdentifier: String
+        switch source {
+        case "chatgpt":
+            fallbackBundleIdentifier = "com.openai.chat"
+        default:
+            return
+        }
+
+        guard let appURL = workspace.urlForApplication(withBundleIdentifier: fallbackBundleIdentifier) else { return }
+
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        workspace.openApplication(at: appURL, configuration: configuration) { _, _ in }
+    }
+
     func scheduleAutoClose(after seconds: Double = 2.0) {
         autoExpandMusicTask?.cancel()
 

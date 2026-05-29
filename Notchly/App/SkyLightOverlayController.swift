@@ -171,6 +171,7 @@ final class SkyLightOverlayController {
                 dynamicManager: environment.dynamicManager,
                 musicManager: environment.musicManager,
                 brightnessManager: environment.brightnessManager,
+                agentEventManager: environment.agentEventManager,
                 screenSize: screen.frame.size
             )
         )
@@ -233,6 +234,7 @@ final class SkyLightOverlayController {
             musicManager: environment.musicManager,
             focusManager: environment.focusManager,
             brightnessManager: environment.brightnessManager,
+            agentEventManager: environment.agentEventManager,
             animationsEnabled: true
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)

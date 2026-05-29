@@ -61,6 +61,14 @@ struct IslandLayout {
         CGSize(width: closedSize.width * 0.5, height: closedHeight)
     }
 
+    var agentPreviewSize: CGSize {
+        musicPreviewSize
+    }
+
+    var agentCollapsedSize: CGSize {
+        CGSize(width: closedSize.width * 0.5, height: closedHeight)
+    }
+
     var chargingSize: CGSize {
         CGSize(width: max(280, baseWidth - 38), height: closedHeight)
     }
@@ -87,6 +95,10 @@ struct IslandLayout {
             return volumeCollapsedSize
         case .volumePreview:
             return volumePreviewSize
+        case .agentCollapse:
+            return agentCollapsedSize
+        case .agentPreview:
+            return agentPreviewSize
         }
     }
 
@@ -112,6 +124,10 @@ struct IslandLayout {
             return 8
         case .volumePreview:
             return 8
+        case .agentCollapse:
+            return 8
+        case .agentPreview:
+            return 24
         }
     }
 }

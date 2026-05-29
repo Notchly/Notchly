@@ -9,6 +9,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @ObservedObject var settingsManager: SettingsManager
+    @ObservedObject var codexHookIntegrationManager: CodexHookIntegrationManager
     @State private var selectedSection: SettingsSection = .about
     @State private var searchText = ""
 
@@ -218,7 +219,10 @@ struct SettingsView: View {
     private var selectedContent: some View {
         switch selectedSection {
         case .general:
-            GeneralSettingsView(settingsManager: settingsManager)
+            GeneralSettingsView(
+                settingsManager: settingsManager,
+                codexHookIntegrationManager: codexHookIntegrationManager
+            )
 
         case .focus:
             FocusSettingsView(settingsManager: settingsManager)

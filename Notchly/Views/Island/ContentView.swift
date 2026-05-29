@@ -15,6 +15,7 @@ struct ContentView: View {
     @ObservedObject var musicManager: MusicManager
     @ObservedObject var focusManager: FocusManager
     @ObservedObject var brightnessManager: BrightnessManager
+    @ObservedObject var agentEventManager: AgentEventManager
     let animationsEnabled: Bool
 
     @State var status: IslandStatus = .closed
@@ -45,6 +46,12 @@ struct ContentView: View {
     @State var playPauseBounce = false
     @State var skipIndicator: String?
     @State var showMusicVolumeControl = false
+    @State var isAgentMusicTransitionActive = false
+    @State var agentMusicReturnStatus: IslandStatus = .closed
+    @State var displayedAgentEvent: AgentEvent?
+    @State var showsAgentMusicContent = false
+    @State var agentMusicHideTask: Task<Void, Never>?
+    @State var agentCollapseShowsMusic = true
     @State var currentScreen: NSScreen?
     @State var resolvedClosedHeight: CGFloat = 36
     
@@ -55,6 +62,10 @@ struct ContentView: View {
     }
 
     var body: some View {
+        islandViewWithScreenReader
+    }
+
+    private var islandRootView: some View {
         ZStack(alignment: .top) {
             Color.clear
                 .allowsHitTesting(false)
@@ -69,6 +80,10 @@ struct ContentView: View {
                 .animation(.easeInOut(duration: 0.22), value: settingsManager.showBattery)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+
+    private var islandViewWithCoreHandlers: some View {
+        islandRootView
         .onAppear {
             handleAppear()
         }
@@ -101,6 +116,10 @@ struct ContentView: View {
             guard showMusicVolumeControl else { return }
             showMusicVolumeControl = false
         }
+    }
+
+    private var islandViewWithNotificationHandlers: some View {
+        islandViewWithCoreHandlers
         .onChange(of: focusManager.focusEventID) { _, eventID in
             guard eventID > 0 else { return }
             handleFocusEvent(isActive: focusManager.focusEventIsActive)
@@ -112,6 +131,10 @@ struct ContentView: View {
         .onChange(of: musicManager.outputVolumeEventID) { _, eventID in
             guard eventID > 0 else { return }
             handleVolumeEvent()
+        }
+        .onChange(of: agentEventManager.eventID) { _, eventID in
+            guard eventID > 0 else { return }
+            handleAgentEventChange(agentEventManager.currentEvent)
         }
         .onChange(of: settingsManager.showFocusAnimations) { _, isEnabled in
             guard !isEnabled else { return }
@@ -128,11 +151,19 @@ struct ContentView: View {
         .onChange(of: settingsManager.showBattery) { _, isEnabled in
             handleBatteryVisibilityChange(isEnabled)
         }
+    }
+
+    private var islandViewWithAnimations: some View {
+        islandViewWithNotificationHandlers
         .animation(animation, value: status)
         .animation(.easeInOut(duration: 0.18), value: focusStatusIsActive)
         .animation(animation, value: showMusicVolumeControl)
         .animation(.easeInOut(duration: 0.22), value: batteryManager.batteryLevel)
         .preferredColorScheme(.dark)
+    }
+
+    private var islandViewWithScreenReader: some View {
+        islandViewWithAnimations
         .background(
             WindowScreenReader { screen in
                 guard currentScreen !== screen else { return }

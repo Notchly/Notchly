@@ -16,13 +16,16 @@ final class AppMenuController: NSObject {
 
     private let settingsWindow: SettingsWindow
     private let updaterController: SPUStandardUpdaterController
+    private let agentEventManager: AgentEventManager
 
     init(
         settingsWindow: SettingsWindow,
-        updaterController: SPUStandardUpdaterController
+        updaterController: SPUStandardUpdaterController,
+        agentEventManager: AgentEventManager
     ) {
         self.settingsWindow = settingsWindow
         self.updaterController = updaterController
+        self.agentEventManager = agentEventManager
         super.init()
     }
 
@@ -78,11 +81,34 @@ final class AppMenuController: NSObject {
         let menu = NSMenu()
         menu.addItem(versionItem)
         menu.addItem(settingsItem)
+
+#if DEBUG
+        let testCodexItem = NSMenuItem(
+            title: "Test Codex Alert",
+            action: #selector(testCodexAlert),
+            keyEquivalent: ""
+        )
+        testCodexItem.target = self
+        menu.addItem(testCodexItem)
+#endif
+
         menu.addItem(.separator())
         menu.addItem(updatesItem)
         menu.addItem(quitItem)
         return menu
     }
+
+#if DEBUG
+    @objc private func testCodexAlert() {
+        agentEventManager.publish(
+            source: "codex",
+            kind: .accessRequest,
+            title: "Need approval",
+            message: "Test alert from menu",
+            ttl: 3.0
+        )
+    }
+#endif
 
     @objc private func openSettings() {
         settingsWindow.show()

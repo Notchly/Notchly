@@ -16,6 +16,7 @@ struct LockScreenOverlayRootView: View {
     let dynamicManager: DynamicManager
     let musicManager: MusicManager
     let brightnessManager: BrightnessManager
+    let agentEventManager: AgentEventManager
     let screenSize: CGSize
 
     @State private var displayedState: LockScreenOverlayState = .locked
@@ -37,6 +38,7 @@ struct LockScreenOverlayRootView: View {
         dynamicManager: DynamicManager,
         musicManager: MusicManager,
         brightnessManager: BrightnessManager,
+        agentEventManager: AgentEventManager,
         screenSize: CGSize
     ) {
         self.model = model
@@ -46,6 +48,7 @@ struct LockScreenOverlayRootView: View {
         self.dynamicManager = dynamicManager
         self.musicManager = musicManager
         self.brightnessManager = brightnessManager
+        self.agentEventManager = agentEventManager
         self.screenSize = screenSize
 
         let initialState = model.state
@@ -86,6 +89,7 @@ struct LockScreenOverlayRootView: View {
                 musicManager: musicManager,
                 focusManager: focusManager,
                 brightnessManager: brightnessManager,
+                agentEventManager: agentEventManager,
                 animationsEnabled: isRegularIslandVisible
             )
             .padding(.top, 0)

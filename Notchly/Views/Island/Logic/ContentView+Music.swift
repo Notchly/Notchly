@@ -11,6 +11,14 @@ extension ContentView {
     var musicContainer: some View {
         let isWaveformActive = animationsEnabled && musicManager.isPlaying
         let clippedWidth = max(0, layout.islandSize.width + layout.cornerRadius * 2)
+        let agentEvent = displayedAgentEvent ?? agentEventManager.currentEvent
+        let hasPendingAgentEvent =
+            agentEvent != nil &&
+            (showsAgentOverMusic || isAgentMusicTransitionActive)
+        let showsAgentActivity =
+            hasPendingAgentEvent &&
+            isAgentMusicTransitionActive &&
+            status == .agentPreview
         
         return IslandContainerView(
             size: layout.islandSize,
@@ -18,11 +26,11 @@ extension ContentView {
             spacing: layout.spacing,
             shadowOpacity: status == .opened || status == .popping ? 0.2 : 0
         ) {
-            if status == .closed ||
+            if !hasPendingAgentEvent && (status == .closed ||
                 status == .popping ||
                 (status == .focusCollapse && focusCollapseShowsMusic) ||
                 (status == .brightnessCollapse && brightnessCollapseShowsMusic) ||
-                (status == .volumeCollapse && volumeCollapseShowsMusic) {
+                (status == .volumeCollapse && volumeCollapseShowsMusic)) {
                 CompactMusicView(
                     artwork: musicManager.artworkImage,
                     waveformColor: musicManager.waveformColor,
@@ -36,7 +44,7 @@ extension ContentView {
                 .zIndex(1)
             }
 
-            if status == .musicPreview {
+            if !hasPendingAgentEvent && status == .musicPreview {
                 PreviewMusicView(
                     artwork: musicManager.artworkImage,
                     combinedPreviewText: combinedPreviewText,
@@ -46,12 +54,28 @@ extension ContentView {
                     skipIndicator: skipIndicator
                 )
                 .offset(y: 10)
-                .transition(
-                    .scale(scale: 0.94)
-                        .combined(with: .opacity)
-                        .combined(with: .offset(y: -10))
-                )
+                .opacity(showsAgentActivity && showsAgentMusicContent ? 0 : 1)
+                .scaleEffect(showsAgentActivity && showsAgentMusicContent ? 0.985 : 1)
+                .animation(.smooth(duration: 0.3, extraBounce: 0), value: showsAgentMusicContent)
+                .transition(.opacity.combined(with: .offset(y: 6)))
                 .zIndex(2)
+            }
+
+            if showsAgentActivity {
+                AgentActivityView(
+                    event: agentEvent,
+                    size: layout.musicPreviewSize
+                )
+                .offset(y: 10)
+                .opacity(showsAgentMusicContent ? 1 : 0)
+                .scaleEffect(showsAgentMusicContent ? 1 : 0.985)
+                .animation(.smooth(duration: 0.3, extraBounce: 0), value: showsAgentMusicContent)
+                .transition(
+                    .scale(scale: 0.985)
+                        .combined(with: .opacity)
+                        .combined(with: .offset(y: -4))
+                )
+                .zIndex(5)
             }
 
             if status == .focusPreview || (status == .focusCollapse && !focusCollapseShowsMusic) {
@@ -157,12 +181,20 @@ extension ContentView {
                 .zIndex(3)
             }
         }
+        .animation(
+            isAgentMusicTransitionActive ? .smooth(duration: 0.42, extraBounce: 0) : animation,
+            value: layout.islandSize.height
+        )
+        .animation(
+            isAgentMusicTransitionActive ? .smooth(duration: 0.42, extraBounce: 0) : animation,
+            value: layout.cornerRadius
+        )
         .frame(width: clippedWidth, height: layout.islandSize.height)
         .clipped()
         .contentShape(RoundedRectangle(cornerRadius: layout.cornerRadius))
         .overlay(
             ZStack {
-                if status == .closed || status == .musicPreview {
+                if !hasPendingAgentEvent && (status == .closed || status == .musicPreview) {
                     IslandClickCatcher {
                         guard settingsManager.showMusic else { return }
 
@@ -176,7 +208,13 @@ extension ContentView {
                     }
                 }
 
-                if status != .opened {
+                if showsAgentActivity {
+                    IslandClickCatcher {
+                        openAgentSourceApp(agentEvent)
+                    }
+                }
+
+                if status != .opened && !hasPendingAgentEvent {
                     ScrollSwipeCatcher { deltaX, deltaY in
                         handleMusicScroll(deltaX: deltaX, deltaY: deltaY)
                     }

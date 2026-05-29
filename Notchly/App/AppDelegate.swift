@@ -14,7 +14,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private lazy var menuController = AppMenuController(
         settingsWindow: environment.settingsWindow,
-        updaterController: environment.updaterController
+        updaterController: environment.updaterController,
+        agentEventManager: environment.agentEventManager
     )
 
     private lazy var lockScreenController = LockScreenStateController(
@@ -29,6 +30,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
 
         menuController.install()
+        environment.agentEventManager.start()
+        environment.chatGPTAppBridgeManager.start()
         environment.musicManager.start()
         overlayController.show()
 
@@ -52,6 +55,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         startupTask?.cancel()
         startupTask = nil
         environment.musicManager.stop()
+        environment.chatGPTAppBridgeManager.stop()
+        environment.agentEventManager.stop()
         environment.focusManager.stop()
         environment.brightnessManager.stop()
         lockScreenController.stop()
