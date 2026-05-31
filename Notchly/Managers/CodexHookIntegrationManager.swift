@@ -12,6 +12,7 @@ import Combine
 final class CodexHookIntegrationManager: ObservableObject {
     enum InstallState {
         case unknown
+        case installing
         case installed
         case notInstalled
         case failed(String)
@@ -31,7 +32,7 @@ final class CodexHookIntegrationManager: ObservableObject {
     var configPreview: String {
         """
         [features]
-        codex_hooks = true
+        hooks = true
 
         # Notchly Codex alerts
         [[hooks.Stop]]
@@ -39,8 +40,8 @@ final class CodexHookIntegrationManager: ObservableObject {
         type = "command"
         command = '\(completedHookCommand)'
 
-        [[hooks.Notification]]
-        [[hooks.Notification.hooks]]
+        [[hooks.PermissionRequest]]
+        [[hooks.PermissionRequest.hooks]]
         type = "command"
         command = '\(approvalHookCommand)'
         """
@@ -51,6 +52,8 @@ final class CodexHookIntegrationManager: ObservableObject {
     }
 
     func install() {
+        installState = .installing
+
         do {
             try installHookScript()
             try updateCodexConfig()
@@ -85,6 +88,7 @@ final class CodexHookIntegrationManager: ObservableObject {
         }
 
         config = enableCodexHooks(in: config)
+        config = removeManagedHookBlocks(from: config)
 
         config = appendHookBlockIfNeeded(
             to: config,
@@ -94,15 +98,69 @@ final class CodexHookIntegrationManager: ObservableObject {
 
         config = appendHookBlockIfNeeded(
             to: config,
-            eventName: "Notification",
+            eventName: "PermissionRequest",
             command: approvalHookCommand
         )
 
         try config.write(to: codexConfigURL, atomically: true, encoding: .utf8)
     }
 
+    private func removeManagedHookBlocks(from config: String) -> String {
+        let lines = config.components(separatedBy: .newlines)
+        var keptLines: [String] = []
+        var pendingBlock: [String] = []
+        var isCapturingHookBlock = false
+
+        func flushPendingBlock() {
+            guard !pendingBlock.isEmpty else { return }
+
+            if pendingBlock.joined(separator: "\n").contains(hookScriptURL.path) {
+                pendingBlock.removeAll()
+                return
+            }
+
+            keptLines.append(contentsOf: pendingBlock)
+            pendingBlock.removeAll()
+        }
+
+        for line in lines {
+            let trimmedLine = line.trimmingCharacters(in: .whitespaces)
+            let isHookHeader = trimmedLine.hasPrefix("[[hooks.")
+
+            if isHookHeader {
+                flushPendingBlock()
+                isCapturingHookBlock = true
+                pendingBlock.append(line)
+                continue
+            }
+
+            if isCapturingHookBlock {
+                let startsRegularTable = trimmedLine.hasPrefix("[") &&
+                    trimmedLine.hasSuffix("]") &&
+                    !trimmedLine.hasPrefix("[[")
+
+                if startsRegularTable {
+                    flushPendingBlock()
+                    isCapturingHookBlock = false
+                    keptLines.append(line)
+                } else {
+                    pendingBlock.append(line)
+                }
+                continue
+            }
+
+            keptLines.append(line)
+        }
+
+        flushPendingBlock()
+
+        return keptLines
+            .joined(separator: "\n")
+            .replacingOccurrences(of: "\n\n\n", with: "\n\n")
+    }
+
     private func appendHookBlockIfNeeded(to config: String, eventName: String, command: String) -> String {
-        guard !config.contains(command) else { return config }
+        guard !containsHookCommand(config, eventName: eventName, command: command) else { return config }
 
         var updatedConfig = config
         if !updatedConfig.isEmpty, !updatedConfig.hasSuffix("\n") {
@@ -123,6 +181,33 @@ command = '\(command)'
         return updatedConfig
     }
 
+    private func containsHookCommand(_ config: String, eventName: String, command: String) -> Bool {
+        let eventHeader = "[[hooks.\(eventName)]]"
+        let handlerHeader = "[[hooks.\(eventName).hooks]]"
+        var isInsideEvent = false
+
+        for line in config.components(separatedBy: .newlines) {
+            let trimmedLine = line.trimmingCharacters(in: .whitespaces)
+
+            if trimmedLine == eventHeader || trimmedLine == handlerHeader {
+                isInsideEvent = true
+                continue
+            }
+
+            if trimmedLine.hasPrefix("[[hooks."),
+               trimmedLine != eventHeader,
+               trimmedLine != handlerHeader {
+                isInsideEvent = false
+            }
+
+            if isInsideEvent, trimmedLine.contains(command) {
+                return true
+            }
+        }
+
+        return false
+    }
+
     private func enableCodexHooks(in config: String) -> String {
         var lines = config.components(separatedBy: .newlines)
 
@@ -131,7 +216,7 @@ command = '\(command)'
                 lines.append("")
             }
             lines.append("[features]")
-            lines.append("codex_hooks = true")
+            lines.append("hooks = true")
             return lines.joined(separator: "\n")
         }
 
@@ -145,10 +230,13 @@ command = '\(command)'
         }
 
         if let existingIndex = lines[lines.index(after: featuresIndex)..<sectionEndIndex]
-            .firstIndex(where: { $0.trimmingCharacters(in: .whitespaces).hasPrefix("codex_hooks") }) {
-            lines[existingIndex] = "codex_hooks = true"
+            .firstIndex(where: {
+                let trimmedLine = $0.trimmingCharacters(in: .whitespaces)
+                return trimmedLine.hasPrefix("hooks") || trimmedLine.hasPrefix("codex_hooks")
+            }) {
+            lines[existingIndex] = "hooks = true"
         } else {
-            lines.insert("codex_hooks = true", at: sectionEndIndex)
+            lines.insert("hooks = true", at: sectionEndIndex)
         }
 
         return lines.joined(separator: "\n")
@@ -160,9 +248,9 @@ command = '\(command)'
             return false
         }
 
-        return config.contains("codex_hooks = true") &&
+        return config.contains("hooks = true") &&
             config.contains(completedHookCommand) &&
-            config.contains(approvalHookCommand)
+            containsHookCommand(config, eventName: "PermissionRequest", command: approvalHookCommand)
     }
 
     private var completedHookCommand: String {
@@ -195,7 +283,7 @@ case "$event_type" in
     title="Task failed"
     message="Codex failed"
     ;;
-  approval|access_request|notification)
+  approval|access_request|notification|permission_request)
     type="access_request"
     title="Need approval"
     message="Codex is awaiting approval"

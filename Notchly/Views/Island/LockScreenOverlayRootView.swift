@@ -18,6 +18,7 @@ struct LockScreenOverlayRootView: View {
     let brightnessManager: BrightnessManager
     let agentEventManager: AgentEventManager
     let screenSize: CGSize
+    let initialClosedHeight: CGFloat
 
     @State private var displayedState: LockScreenOverlayState = .locked
     @State private var isUnlocking = false
@@ -39,7 +40,8 @@ struct LockScreenOverlayRootView: View {
         musicManager: MusicManager,
         brightnessManager: BrightnessManager,
         agentEventManager: AgentEventManager,
-        screenSize: CGSize
+        screenSize: CGSize,
+        initialClosedHeight: CGFloat
     ) {
         self.model = model
         self.settingsManager = settingsManager
@@ -50,11 +52,13 @@ struct LockScreenOverlayRootView: View {
         self.brightnessManager = brightnessManager
         self.agentEventManager = agentEventManager
         self.screenSize = screenSize
+        self.initialClosedHeight = initialClosedHeight
 
         let initialState = model.state
         _displayedState = State(initialValue: initialState)
         _showLockScreenPlayer = State(initialValue: initialState == .locked)
         _lastHandledState = State(initialValue: initialState)
+        _resolvedClosedHeight = State(initialValue: initialClosedHeight)
     }
     
     private func updateClosedHeight(for screen: NSScreen?) {
@@ -125,6 +129,7 @@ struct LockScreenOverlayRootView: View {
             }
 
             LockScreenIslandView(
+                islandWidth: CGFloat(settingsManager.islandWidth),
                 height: resolvedClosedHeight,
                 isUnlocking: isUnlocking,
                 showOpenedLock: showOpenedLock
@@ -142,7 +147,6 @@ struct LockScreenOverlayRootView: View {
             displayedState = model.state
             showLockScreenPlayer = model.state == .locked
             lastHandledState = model.state
-            updateClosedHeight(for: currentScreen)
         }
         .onChange(of: model.state) { _, newValue in
             handleStateChange(newValue)

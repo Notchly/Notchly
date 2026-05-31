@@ -172,7 +172,8 @@ final class SkyLightOverlayController {
                 musicManager: environment.musicManager,
                 brightnessManager: environment.brightnessManager,
                 agentEventManager: environment.agentEventManager,
-                screenSize: screen.frame.size
+                screenSize: screen.frame.size,
+                initialClosedHeight: IslandHeightResolver.closedHeight(for: screen)
             )
         )
 

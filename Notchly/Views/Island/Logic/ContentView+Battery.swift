@@ -84,6 +84,8 @@ extension ContentView {
     }
 
     func handleBatteryVisibilityChange(_ isEnabled: Bool) {
+        dynamicManager.updateCurrentModule()
+
         guard !isEnabled else { return }
 
         showChargingPop = false

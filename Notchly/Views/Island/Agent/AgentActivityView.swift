@@ -39,23 +39,17 @@ struct AgentActivityView: View {
     }
 
     private var secondaryText: String {
-        event?.title ?? "Response generated"
+        event?.title ?? "Job is done"
     }
 
     private var showsTrailingWaveform: Bool {
         guard let event else { return false }
-        return !(event.source.lowercased() == "chatgpt" && event.kind == .completed)
+        return true
     }
 
     @ViewBuilder
     private var sourceIcon: some View {
-        if event?.source.lowercased() == "chatgpt" {
-            Image("ChatGPTAgentIcon")
-                .resizable()
-                .renderingMode(.original)
-                .scaledToFit()
-                .frame(width: 22, height: 22)
-        } else if event?.source.lowercased() == "codex" {
+        if event?.source.lowercased() == "codex" {
             Image("CodexAgentIcon")
                 .resizable()
                 .renderingMode(.original)
@@ -73,8 +67,6 @@ struct AgentActivityView: View {
         guard let source = event?.source.lowercased() else { return "sparkles" }
 
         switch source {
-        case "chatgpt":
-            return "bubble.left.and.text.bubble.right.fill"
         case "codex":
             return "terminal.fill"
         default:
@@ -84,8 +76,6 @@ struct AgentActivityView: View {
 
     private var sourceIconColor: Color {
         switch event?.source.lowercased() {
-        case "chatgpt":
-            return Color(red: 0.40, green: 0.88, blue: 0.68)
         case "codex":
             return Color(red: 0.50, green: 0.80, blue: 1.0)
         default:

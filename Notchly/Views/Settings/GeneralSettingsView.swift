@@ -10,7 +10,6 @@ import SwiftUI
 struct GeneralSettingsView: View {
     @ObservedObject var settingsManager: SettingsManager
     @ObservedObject var codexHookIntegrationManager: CodexHookIntegrationManager
-    @State private var isAccessibilityTrusted = AccessibilityPermissionManager.isTrusted
 
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
@@ -60,14 +59,6 @@ struct GeneralSettingsView: View {
 
                     SettingsDivider()
 
-                    AccessibilityPermissionRow(
-                        isTrusted: isAccessibilityTrusted,
-                        requestAccess: requestAccessibilityAccess,
-                        refreshStatus: refreshAccessibilityStatus
-                    )
-
-                    SettingsDivider()
-
                     CodexHookIntegrationRow(
                         manager: codexHookIntegrationManager
                     )
@@ -82,23 +73,11 @@ struct GeneralSettingsView: View {
                 }
             }
         }
-        .onAppear(perform: refreshAccessibilityStatus)
         .onAppear(perform: codexHookIntegrationManager.refreshStatus)
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            refreshAccessibilityStatus()
             codexHookIntegrationManager.refreshStatus()
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
-    }
-
-    private func requestAccessibilityAccess() {
-        AccessibilityPermissionManager.requestAccess()
-        AccessibilityPermissionManager.openSystemSettings()
-        refreshAccessibilityStatus()
-    }
-
-    private func refreshAccessibilityStatus() {
-        isAccessibilityTrusted = AccessibilityPermissionManager.isTrusted
     }
 }
 
@@ -153,7 +132,7 @@ private struct CodexHookIntegrationRow: View {
                 Button {
                     manager.install()
                 } label: {
-                    Text(manager.isInstalled ? "Reinstall" : "Install Hook")
+                    Text(installButtonTitle)
                         .font(.system(size: 12, weight: .semibold))
                         .padding(.horizontal, 14)
                         .frame(height: 32)
@@ -200,6 +179,8 @@ private struct CodexHookIntegrationRow: View {
         switch manager.installState {
         case .unknown:
             return "Checking"
+        case .installing:
+            return "Installing"
         case .installed:
             return "Enabled"
         case .notInstalled:
@@ -215,7 +196,7 @@ private struct CodexHookIntegrationRow: View {
             return .green
         case .failed:
             return .red
-        case .unknown:
+        case .unknown, .installing:
             return .secondary
         case .notInstalled:
             return .orange
@@ -229,60 +210,16 @@ private struct CodexHookIntegrationRow: View {
 
         return "Shows Codex completion alerts using a transparent local Stop hook."
     }
-}
 
-private struct AccessibilityPermissionRow: View {
-    let isTrusted: Bool
-    let requestAccess: () -> Void
-    let refreshStatus: () -> Void
-
-    var body: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 8) {
-                    Text("Accessibility Access")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.primary)
-
-                    Text(isTrusted ? "Enabled" : "Required")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(isTrusted ? .green : .orange)
-                        .padding(.horizontal, 8)
-                        .frame(height: 22)
-                        .background((isTrusted ? Color.green : Color.orange).opacity(0.16))
-                        .clipShape(Capsule())
-                }
-
-                Text("Required for ChatGPT notifications in hybrid mode.")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-            }
-
-            Spacer(minLength: 16)
-
-            Button {
-                requestAccess()
-                refreshStatus()
-            } label: {
-                Text(isTrusted ? "Open Settings" : "Enable")
-                    .font(.system(size: 12, weight: .semibold))
-                    .padding(.horizontal, 14)
-                    .frame(height: 32)
-                    .background(isTrusted ? Color.white.opacity(0.08) : Color.accentColor.opacity(0.26))
-                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            }
-            .buttonStyle(SubtleHoverButtonStyle(
-                pressedScale: 0.96,
-                hoverScale: 1.025,
-                hoverBackgroundOpacity: 0.08,
-                cornerRadius: 16
-            ))
+    private var installButtonTitle: String {
+        switch manager.installState {
+        case .installing:
+            return "Installing..."
+        case .installed:
+            return "Reinstall"
+        default:
+            return "Install Hook"
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity)
     }
 }
 

@@ -174,12 +174,6 @@ extension ContentView {
             let bundleIdentifier = app.bundleIdentifier?.lowercased() ?? ""
             let localizedName = app.localizedName?.lowercased() ?? ""
 
-            if source == "chatgpt" {
-                return bundleIdentifier == "com.openai.chat" ||
-                bundleIdentifier.contains("chatgpt") ||
-                localizedName == "chatgpt"
-            }
-
             if source == "codex" {
                 return bundleIdentifier.contains("codex") ||
                 localizedName == "codex" ||
@@ -192,19 +186,7 @@ extension ContentView {
             return
         }
 
-        let fallbackBundleIdentifier: String
-        switch source {
-        case "chatgpt":
-            fallbackBundleIdentifier = "com.openai.chat"
-        default:
-            return
-        }
-
-        guard let appURL = workspace.urlForApplication(withBundleIdentifier: fallbackBundleIdentifier) else { return }
-
-        let configuration = NSWorkspace.OpenConfiguration()
-        configuration.activates = true
-        workspace.openApplication(at: appURL, configuration: configuration) { _, _ in }
+        return
     }
 
     func scheduleAutoClose(after seconds: Double = 2.0) {

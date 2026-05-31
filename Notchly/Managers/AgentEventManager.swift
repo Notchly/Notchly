@@ -29,8 +29,6 @@ struct AgentEvent: Identifiable, Equatable {
 
     var sourceLabel: String {
         switch source.lowercased() {
-        case "chatgpt":
-            return "ChatGPT"
         case "codex":
             return "Codex"
         default:
@@ -176,7 +174,7 @@ final class AgentEventManager: ObservableObject {
         let title = payload.title?.trimmingCharacters(in: .whitespacesAndNewlines)
         let message = payload.message?.trimmingCharacters(in: .whitespacesAndNewlines)
         let ttl = min(max(payload.ttl ?? defaultTTL(for: kind), 1.5), 30)
-        let source = payload.source?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "chatgpt"
+        let source = payload.source?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard isAllowedSource(source) else {
             debugLog("ignored unsupported source=\(source)")
             return nil
@@ -219,6 +217,12 @@ final class AgentEventManager: ObservableObject {
         debugLog("show event source=\(event.source) kind=\(event.kind.rawValue) ttl=\(event.ttl)")
 
         clearTask?.cancel()
+        guard shouldAutoClear(event) else {
+            clearTask = nil
+            debugLog("sticky event source=\(event.source) kind=\(event.kind.rawValue)")
+            return
+        }
+
         clearTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(event.ttl))
             guard !Task.isCancelled else { return }
@@ -229,6 +233,15 @@ final class AgentEventManager: ObservableObject {
                 self?.debugLog("cleared event source=\(event.source) kind=\(event.kind.rawValue)")
             }
         }
+    }
+
+    private func shouldAutoClear(_ event: AgentEvent) -> Bool {
+        let source = event.source.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if source == "codex", event.kind == .accessRequest {
+            return false
+        }
+
+        return true
     }
 
     private func duplicateKey(for event: AgentEvent) -> String {
@@ -255,10 +268,7 @@ final class AgentEventManager: ObservableObject {
 
     private func defaultTitle(for kind: AgentEventKind, source: String = "") -> String {
         if kind == .completed {
-            if source.lowercased() == "codex" {
-                return "Job is done"
-            }
-            return "Response generated"
+            return "Job is done"
         }
 
         switch kind {
@@ -284,7 +294,7 @@ final class AgentEventManager: ObservableObject {
 
     private func isAllowedSource(_ source: String) -> Bool {
         let normalizedSource = source.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return normalizedSource == "chatgpt" || normalizedSource == "codex"
+        return normalizedSource == "codex"
     }
 
     private func ensureEventsFile() throws {

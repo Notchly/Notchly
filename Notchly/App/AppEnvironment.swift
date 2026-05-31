@@ -39,10 +39,6 @@ final class AppEnvironment {
 
     lazy var batteryManager = BatteryManager(musicManager: musicManager)
 
-    lazy var chatGPTAppBridgeManager = ChatGPTAppBridgeManager(
-        agentEventManager: agentEventManager
-    )
-
     lazy var dynamicManager = DynamicManager(
         batteryManager: batteryManager,
         musicManager: musicManager,

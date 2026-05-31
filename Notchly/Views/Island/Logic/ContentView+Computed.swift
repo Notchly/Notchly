@@ -45,7 +45,11 @@ extension ContentView {
                 case .agent:
                     agentContainer
                 case .battery:
-                    islandContainer
+                    if settingsManager.showBattery {
+                        islandContainer
+                    } else {
+                        emptyBar
+                    }
                 case .music:
                     musicContainer
                 case .none:

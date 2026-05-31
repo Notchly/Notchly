@@ -15,8 +15,8 @@ struct BatterySettingsView: View {
             SettingsCard {
                 VStack(spacing: 0) {
                     SettingsToggleRow(
-                        title: "Battery Status",
-                        subtitle: "Show battery state and charging updates around the notch.",
+                        title: "Show Battery Island",
+                        subtitle: "Display battery state and charging updates around the notch.",
                         isOn: $settingsManager.showBattery
                     )
 
@@ -57,7 +57,7 @@ struct BatterySettingsView: View {
                 }
             }
 
-            Text("Controls when the low battery state appears while Battery Status is enabled.")
+            Text("Controls when the low battery state appears while Battery Island is enabled.")
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 4)
