@@ -60,19 +60,6 @@ https://github.com/user-attachments/assets/01e1a07d-79c5-444c-abfd-1ae2ec9b4e48
 
 </p>
 
-## Features
-
-| Feature | What it adds |
-| --- | --- |
-| Dynamic Island overlay | A compact, native HUD designed for the notch and safe area. |
-| Music controls | Play/pause, previous/next, seek, shuffle, volume, artwork, and app handoff. |
-| Lock screen player | A centered music player with liquid-glass styling and artwork transitions. |
-| Battery states | Charging, low-battery, and compact battery status views. |
-| Focus animations | Short on/off animations that work alongside active music playback. |
-| Swipe gestures | Quick controls for switching and interacting with island states. |
-| Multi-display support | Choose primary-display behavior or let Notchly follow the active screen. |
-| Native settings | Focused preferences for general behavior, battery, music, and updates. |
-
 ## Quickstart
 
 ### Download
