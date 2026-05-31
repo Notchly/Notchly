@@ -166,12 +166,7 @@ final class SkyLightOverlayController {
             LockScreenOverlayRootView(
                 model: environment.lockScreenOverlayModel,
                 settingsManager: environment.settingsManager,
-                focusManager: environment.focusManager,
-                batteryManager: environment.batteryManager,
-                dynamicManager: environment.dynamicManager,
                 musicManager: environment.musicManager,
-                brightnessManager: environment.brightnessManager,
-                agentEventManager: environment.agentEventManager,
                 screenSize: screen.frame.size,
                 initialClosedHeight: IslandHeightResolver.closedHeight(for: screen)
             )
@@ -194,7 +189,7 @@ final class SkyLightOverlayController {
         lockScreenWindowCloseTask?.cancel()
 
         lockScreenWindowCloseTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .milliseconds(420))
+            try? await Task.sleep(for: .milliseconds(190))
             guard !Task.isCancelled else { return }
             guard self?.environment.lockScreenOverlayModel.state == .music else { return }
 

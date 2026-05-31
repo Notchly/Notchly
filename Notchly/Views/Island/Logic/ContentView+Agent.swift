@@ -9,13 +9,16 @@ import SwiftUI
 
 extension ContentView {
     var agentContainer: some View {
-        IslandContainerView(
+        let event = activeAgentEvent
+
+        return IslandContainerView(
             size: layout.musicPreviewSize,
             cornerRadius: 24,
-            spacing: layout.spacing
+            spacing: layout.spacing,
+            showsTopCornerCutouts: false
         ) {
             AgentActivityView(
-                event: agentEventManager.currentEvent,
+                event: event,
                 size: layout.musicPreviewSize
             )
             .offset(y: 10)
@@ -23,7 +26,7 @@ extension ContentView {
         }
         .overlay {
             IslandClickCatcher {
-                openAgentSourceApp(agentEventManager.currentEvent)
+                openAgentSourceApp(event)
             }
         }
     }

@@ -16,14 +16,18 @@ extension ContentView {
             showChargingPop: showChargingPop,
             isMusicVolumeControlExpanded: showMusicVolumeControl,
             closedHeight: closedHeight,
-            islandWidth: CGFloat(settingsManager.islandWidth)
+            islandWidth: effectiveIslandWidth,
+            allowsCompactBaseWidth: musicStartUsesIdleWidth,
+            idleWidthOverride: configuredIdleIslandWidth
         )
     }
 
     var activeModuleView: some View {
         Group {
-            if showsAgentOverMusic || isAgentMusicTransitionActive {
+            if isAgentMusicTransitionActive {
                 musicContainer
+            } else if isStandaloneAgentPresentationActive {
+                agentContainer
             } else if dynamicManager.currentModule == .agent,
                       agentEventManager.currentEvent == nil,
                       settingsManager.showMusic,
@@ -36,9 +40,7 @@ extension ContentView {
                 status == .brightnessCollapse ||
                 status == .brightnessPreview ||
                 status == .volumeCollapse ||
-                status == .volumePreview ||
-                status == .agentCollapse ||
-                status == .agentPreview {
+                status == .volumePreview {
                 musicContainer
             } else {
                 switch dynamicManager.currentModule {
@@ -96,11 +98,65 @@ extension ContentView {
         agentEventManager.currentEvent != nil && canShowAgentOverMusic
     }
 
+    var activeAgentEvent: AgentEvent? {
+        displayedAgentEvent ?? agentEventManager.currentEvent
+    }
+
+    var isStandaloneAgentPresentationActive: Bool {
+        guard !isAgentMusicTransitionActive else { return false }
+        guard activeAgentEvent != nil else { return false }
+        return status == .agentPreview || status == .agentCollapse
+    }
+
+    var isAgentAlertBlockingOtherEvents: Bool {
+        activeAgentEvent != nil || isAgentMusicTransitionActive
+    }
+
     var closedHeight: CGFloat {
         resolvedClosedHeight
     }
 
+    var configuredBaseIslandWidth: CGFloat {
+        min(max(CGFloat(settingsManager.islandWidth), 280), 360)
+    }
+
+    var configuredIdleIslandWidth: CGFloat {
+        IslandWidthResolver.idleWidth(
+            for: currentScreen,
+            configuredIslandWidth: configuredBaseIslandWidth
+        )
+    }
+
+    var effectiveIslandWidth: CGFloat {
+        guard musicStartUsesIdleWidth,
+              dynamicManager.currentModule == .music,
+              status == .closed else {
+            return CGFloat(settingsManager.islandWidth)
+        }
+
+        return configuredIdleIslandWidth
+    }
+
+    var usesIdleNotchSize: Bool {
+        guard status == .closed else { return false }
+        guard agentEventManager.currentEvent == nil else { return false }
+        guard !showChargingPop else { return false }
+        guard !musicEndKeepsFullWidth else { return false }
+        guard !musicManager.hasNowPlayingContent else { return false }
+        guard !musicManager.isResolvingNowPlaying else { return false }
+
+        return dynamicManager.currentModule == .none || dynamicManager.currentModule == .battery
+    }
+
+    var idleNotchSize: CGSize {
+        usesIdleNotchSize && isHovered ? layout.idleHoverSize : layout.idleSize
+    }
+
     var hoverScale: CGFloat {
+        if usesIdleNotchSize {
+            return 1.0
+        }
+
         guard isHovered else { return 1.0 }
 
         switch status {

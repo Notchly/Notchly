@@ -44,6 +44,16 @@ final class CodexHookIntegrationManager: ObservableObject {
         [[hooks.PermissionRequest.hooks]]
         type = "command"
         command = '\(approvalHookCommand)'
+
+        [[hooks.PreToolUse]]
+        [[hooks.PreToolUse.hooks]]
+        type = "command"
+        command = '\(approvedHookCommand)'
+
+        [[hooks.PostToolUse]]
+        [[hooks.PostToolUse.hooks]]
+        type = "command"
+        command = '\(approvedHookCommand)'
         """
     }
 
@@ -100,6 +110,18 @@ final class CodexHookIntegrationManager: ObservableObject {
             to: config,
             eventName: "PermissionRequest",
             command: approvalHookCommand
+        )
+
+        config = appendHookBlockIfNeeded(
+            to: config,
+            eventName: "PreToolUse",
+            command: approvedHookCommand
+        )
+
+        config = appendHookBlockIfNeeded(
+            to: config,
+            eventName: "PostToolUse",
+            command: approvedHookCommand
         )
 
         try config.write(to: codexConfigURL, atomically: true, encoding: .utf8)
@@ -250,7 +272,9 @@ command = '\(command)'
 
         return config.contains("hooks = true") &&
             config.contains(completedHookCommand) &&
-            containsHookCommand(config, eventName: "PermissionRequest", command: approvalHookCommand)
+            containsHookCommand(config, eventName: "PermissionRequest", command: approvalHookCommand) &&
+            containsHookCommand(config, eventName: "PreToolUse", command: approvedHookCommand) &&
+            containsHookCommand(config, eventName: "PostToolUse", command: approvedHookCommand)
     }
 
     private var completedHookCommand: String {
@@ -259,6 +283,10 @@ command = '\(command)'
 
     private var approvalHookCommand: String {
         "\"\(hookScriptURL.path)\" approval"
+    }
+
+    private var approvedHookCommand: String {
+        "\"\(hookScriptURL.path)\" approved"
     }
 
     private var hookScript: String {
@@ -287,6 +315,11 @@ case "$event_type" in
     type="access_request"
     title="Need approval"
     message="Codex is awaiting approval"
+    ;;
+  approved|clear|pre_tool_use|pretooluse|post_tool_use|posttooluse)
+    type="clear"
+    title=""
+    message=""
     ;;
   *)
     type="completed"

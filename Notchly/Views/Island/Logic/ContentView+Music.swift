@@ -24,7 +24,8 @@ extension ContentView {
             size: layout.islandSize,
             cornerRadius: layout.cornerRadius,
             spacing: layout.spacing,
-            shadowOpacity: status == .opened || status == .popping ? 0.2 : 0
+            shadowOpacity: status == .opened || status == .popping ? 0.2 : 0,
+            showsTopCornerCutouts: !hasPendingAgentEvent
         ) {
             if !hasPendingAgentEvent && (status == .closed ||
                 status == .popping ||
@@ -183,6 +184,10 @@ extension ContentView {
         }
         .animation(
             isAgentMusicTransitionActive ? .smooth(duration: 0.42, extraBounce: 0) : animation,
+            value: layout.islandSize.width
+        )
+        .animation(
+            isAgentMusicTransitionActive ? .smooth(duration: 0.42, extraBounce: 0) : animation,
             value: layout.islandSize.height
         )
         .animation(
@@ -295,6 +300,7 @@ extension ContentView {
     }
 
     func handleMusicAutoExpand(isPlaying: Bool) {
+        guard !isAgentAlertBlockingOtherEvents else { return }
         guard dynamicManager.currentModule == .music else { return }
         guard isPlaying else { return }
         guard settingsManager.showMusic else { return }
@@ -328,6 +334,7 @@ extension ContentView {
             guard !Task.isCancelled else { return }
 
             await MainActor.run {
+                guard !isAgentAlertBlockingOtherEvents else { return }
                 guard dynamicManager.currentModule == .music else { return }
                 guard status == .musicPreview else { return }
                 guard previewAutoCloseKey == scheduledKey else { return }

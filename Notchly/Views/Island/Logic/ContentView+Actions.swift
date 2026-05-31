@@ -16,6 +16,12 @@ extension ContentView {
         hideFocusStatusPreview(animated: false)
         hideBrightnessStatusPreview(animated: false)
         hideVolumeStatusPreview(animated: false)
+        musicStartWidthTask?.cancel()
+        musicStartWidthTask = nil
+        musicStartUsesIdleWidth = false
+        musicEndWidthTask?.cancel()
+        musicEndWidthTask = nil
+        musicEndKeepsFullWidth = false
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
             hasFinishedInitialAppear = true
@@ -36,6 +42,68 @@ extension ContentView {
         }
     }
 
+    func handleNowPlayingContentChange(_ hasNowPlayingContent: Bool) {
+        musicStartWidthTask?.cancel()
+        musicStartWidthTask = nil
+        musicEndWidthTask?.cancel()
+        musicEndWidthTask = nil
+
+        guard hasNowPlayingContent else {
+            musicStartUsesIdleWidth = false
+            beginMusicEndWidthTransitionIfNeeded()
+            return
+        }
+
+        musicEndKeepsFullWidth = false
+
+        guard status == .closed else { return }
+        guard !showChargingPop else { return }
+        guard activeAgentEvent == nil else { return }
+
+        musicStartUsesIdleWidth = true
+
+        musicStartWidthTask = Task {
+            try? await Task.sleep(for: .milliseconds(120))
+            guard !Task.isCancelled else { return }
+
+            await MainActor.run {
+                withAnimation(.smooth(duration: 0.42, extraBounce: 0)) {
+                    musicStartUsesIdleWidth = false
+                }
+                musicStartWidthTask = nil
+            }
+        }
+    }
+
+    func beginMusicEndWidthTransitionIfNeeded() {
+        guard status == .closed else {
+            musicEndKeepsFullWidth = false
+            return
+        }
+        guard !showChargingPop else {
+            musicEndKeepsFullWidth = false
+            return
+        }
+        guard activeAgentEvent == nil else {
+            musicEndKeepsFullWidth = false
+            return
+        }
+
+        musicEndKeepsFullWidth = true
+
+        musicEndWidthTask = Task {
+            try? await Task.sleep(for: .milliseconds(80))
+            guard !Task.isCancelled else { return }
+
+            await MainActor.run {
+                withAnimation(.smooth(duration: 0.42, extraBounce: 0)) {
+                    musicEndKeepsFullWidth = false
+                }
+                musicEndWidthTask = nil
+            }
+        }
+    }
+
     func closeIfOpened() {
         autoExpandMusicTask?.cancel()
         guard status == .opened || status == .musicPreview else { return }
@@ -49,10 +117,52 @@ extension ContentView {
         if let event {
             agentMusicHideTask?.cancel()
             displayedAgentEvent = event
-            beginAgentMusicTransitionIfNeeded()
+            if canShowAgentOverMusic {
+                beginAgentMusicTransitionIfNeeded()
+            } else {
+                beginStandaloneAgentPresentation()
+            }
         } else {
             hideAgentMusicContent()
+            hideStandaloneAgentPresentationIfNeeded()
         }
+    }
+
+    func beginStandaloneAgentPresentation() {
+        autoExpandMusicTask?.cancel()
+        focusStatusTask?.cancel()
+        brightnessStatusTask?.cancel()
+        volumeStatusTask?.cancel()
+        musicStartWidthTask?.cancel()
+        musicStartWidthTask = nil
+        musicStartUsesIdleWidth = false
+        musicEndWidthTask?.cancel()
+        musicEndWidthTask = nil
+        musicEndKeepsFullWidth = false
+        showChargingPop = false
+        showMusicVolumeControl = false
+        isAgentMusicTransitionActive = false
+        showsAgentMusicContent = false
+
+        guard status != .agentPreview else { return }
+
+        withAnimation(.smooth(duration: 0.42, extraBounce: 0)) {
+            status = .agentPreview
+        }
+    }
+
+    func hideStandaloneAgentPresentationIfNeeded() {
+        guard !isAgentMusicTransitionActive else { return }
+        guard status == .agentPreview || status == .agentCollapse else {
+            displayedAgentEvent = nil
+            return
+        }
+
+        withAnimation(.smooth(duration: 0.34, extraBounce: 0)) {
+            status = .closed
+        }
+
+        displayedAgentEvent = nil
     }
 
     func beginAgentMusicTransitionIfNeeded() {
@@ -234,6 +344,10 @@ extension ContentView {
     }
 
     func handleFocusEvent(isActive: Bool) {
+        guard !isAgentAlertBlockingOtherEvents else {
+            pendingFocusEventTimestamp = nil
+            return
+        }
         guard settingsManager.showFocusAnimations else { return }
         guard canShowFocusStatusAnimation else {
             queuePendingFocusEvent(isActive: isActive)
@@ -254,6 +368,10 @@ extension ContentView {
     }
 
     func playPendingFocusEventIfReady() {
+        guard !isAgentAlertBlockingOtherEvents else {
+            pendingFocusEventTimestamp = nil
+            return
+        }
         guard let timestamp = pendingFocusEventTimestamp else { return }
 
         guard settingsManager.showFocusAnimations else {
@@ -274,6 +392,7 @@ extension ContentView {
     }
 
     private func startFocusStatusAnimation(isActive: Bool) {
+        guard !isAgentAlertBlockingOtherEvents else { return }
 
         let collapseDuration = 0.34
 
@@ -328,6 +447,7 @@ extension ContentView {
             guard !Task.isCancelled else { return }
 
             await MainActor.run {
+                guard !isAgentAlertBlockingOtherEvents else { return }
                 guard status == .focusCollapse else { return }
 
                 focusCollapseShowsMusic = false
@@ -358,6 +478,7 @@ extension ContentView {
             guard !Task.isCancelled else { return }
 
             await MainActor.run {
+                guard !isAgentAlertBlockingOtherEvents else { return }
                 guard status == .focusPreview else { return }
 
                 focusCollapseShowsMusic = false
@@ -371,6 +492,7 @@ extension ContentView {
             guard !Task.isCancelled else { return }
 
             await MainActor.run {
+                guard !isAgentAlertBlockingOtherEvents else { return }
                 guard status == .focusCollapse else { return }
 
                 focusCollapseShowsMusic = true
@@ -388,6 +510,10 @@ extension ContentView {
     }
 
     func handleBrightnessEvent() {
+        guard !isAgentAlertBlockingOtherEvents else {
+            pendingBrightnessEventTimestamp = nil
+            return
+        }
         guard settingsManager.showBrightnessStatus else { return }
 
         lastBrightnessStatusEventTime = Date.timeIntervalSinceReferenceDate
@@ -410,6 +536,10 @@ extension ContentView {
     }
 
     func playPendingBrightnessEventIfReady() {
+        guard !isAgentAlertBlockingOtherEvents else {
+            pendingBrightnessEventTimestamp = nil
+            return
+        }
         guard let timestamp = pendingBrightnessEventTimestamp else { return }
 
         guard Date.timeIntervalSinceReferenceDate - timestamp < 2.5 else {
@@ -424,6 +554,8 @@ extension ContentView {
     }
 
     private func startBrightnessStatusAnimation() {
+        guard !isAgentAlertBlockingOtherEvents else { return }
+
         let collapseDuration = 0.34
 
         if status == .brightnessCollapse {
@@ -480,6 +612,7 @@ extension ContentView {
             guard !Task.isCancelled else { return }
 
             await MainActor.run {
+                guard !isAgentAlertBlockingOtherEvents else { return }
                 guard status == .brightnessCollapse else { return }
 
                 brightnessCollapseShowsMusic = false
@@ -523,6 +656,7 @@ extension ContentView {
             }
 
             await MainActor.run {
+                guard !isAgentAlertBlockingOtherEvents else { return }
                 guard status == .brightnessPreview else { return }
 
                 brightnessCollapseShowsMusic = false
@@ -536,6 +670,7 @@ extension ContentView {
             guard !Task.isCancelled else { return }
 
             await MainActor.run {
+                guard !isAgentAlertBlockingOtherEvents else { return }
                 guard status == .brightnessCollapse else { return }
 
                 brightnessCollapseShowsMusic = true
@@ -553,6 +688,10 @@ extension ContentView {
     }
 
     func handleVolumeEvent() {
+        guard !isAgentAlertBlockingOtherEvents else {
+            pendingVolumeEventTimestamp = nil
+            return
+        }
         guard settingsManager.showSoundStatus else { return }
 
         lastVolumeStatusEventTime = Date.timeIntervalSinceReferenceDate
@@ -575,6 +714,10 @@ extension ContentView {
     }
 
     func playPendingVolumeEventIfReady() {
+        guard !isAgentAlertBlockingOtherEvents else {
+            pendingVolumeEventTimestamp = nil
+            return
+        }
         guard let timestamp = pendingVolumeEventTimestamp else { return }
 
         guard Date.timeIntervalSinceReferenceDate - timestamp < 2.5 else {
@@ -589,6 +732,8 @@ extension ContentView {
     }
 
     private func startVolumeStatusAnimation() {
+        guard !isAgentAlertBlockingOtherEvents else { return }
+
         let collapseDuration = 0.34
 
         if status == .volumeCollapse {
@@ -645,6 +790,7 @@ extension ContentView {
             guard !Task.isCancelled else { return }
 
             await MainActor.run {
+                guard !isAgentAlertBlockingOtherEvents else { return }
                 guard status == .volumeCollapse else { return }
 
                 volumeCollapseShowsMusic = false
@@ -688,6 +834,7 @@ extension ContentView {
             }
 
             await MainActor.run {
+                guard !isAgentAlertBlockingOtherEvents else { return }
                 guard status == .volumePreview else { return }
 
                 volumeCollapseShowsMusic = false
@@ -701,6 +848,7 @@ extension ContentView {
             guard !Task.isCancelled else { return }
 
             await MainActor.run {
+                guard !isAgentAlertBlockingOtherEvents else { return }
                 guard status == .volumeCollapse else { return }
 
                 volumeCollapseShowsMusic = true

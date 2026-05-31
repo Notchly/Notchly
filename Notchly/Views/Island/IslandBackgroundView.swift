@@ -12,6 +12,7 @@ struct IslandBackgroundView: View {
     let cornerRadius: CGFloat
     let spacing: CGFloat
     let shadowOpacity: Double
+    let showsTopCornerCutouts: Bool
 
     var body: some View {
         Rectangle()
@@ -20,7 +21,8 @@ struct IslandBackgroundView: View {
                 IslandMaskView(
                     size: size,
                     cornerRadius: cornerRadius,
-                    spacing: spacing
+                    spacing: spacing,
+                    showsTopCornerCutouts: showsTopCornerCutouts
                 )
             )
             .frame(

@@ -52,6 +52,10 @@ struct ContentView: View {
     @State var showsAgentMusicContent = false
     @State var agentMusicHideTask: Task<Void, Never>?
     @State var agentCollapseShowsMusic = true
+    @State var musicStartUsesIdleWidth = false
+    @State var musicStartWidthTask: Task<Void, Never>?
+    @State var musicEndKeepsFullWidth = false
+    @State var musicEndWidthTask: Task<Void, Never>?
     @State var currentScreen: NSScreen?
     @State var resolvedClosedHeight: CGFloat = 36
     
@@ -105,6 +109,9 @@ struct ContentView: View {
             playPendingFocusEventIfReady()
             playPendingBrightnessEventIfReady()
             playPendingVolumeEventIfReady()
+        }
+        .onChange(of: musicManager.hasNowPlayingContent) { _, hasNowPlayingContent in
+            handleNowPlayingContentChange(hasNowPlayingContent)
         }
         .onChange(of: animationsEnabled) { _, _ in
             playPendingFocusEventIfReady()

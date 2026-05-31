@@ -10,6 +10,7 @@ import Combine
 
 enum AgentEventKind: String, Decodable {
     case accessRequest = "access_request"
+    case clear
     case waiting
     case completed
     case failed
@@ -193,6 +194,11 @@ final class AgentEventManager: ObservableObject {
     }
 
     private func showEvent(_ event: AgentEvent) {
+        if event.kind == .clear {
+            clearCurrentEvent(for: event.source)
+            return
+        }
+
         let eventKey = duplicateKey(for: event)
         let now = Date()
 
@@ -235,6 +241,20 @@ final class AgentEventManager: ObservableObject {
         }
     }
 
+    private func clearCurrentEvent(for source: String) {
+        let normalizedSource = source.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard currentEvent?.source.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == normalizedSource else {
+            debugLog("clear ignored source=\(source)")
+            return
+        }
+
+        clearTask?.cancel()
+        clearTask = nil
+        currentEvent = nil
+        eventID += 1
+        debugLog("cleared event source=\(source) by hook")
+    }
+
     private func shouldAutoClear(_ event: AgentEvent) -> Bool {
         let source = event.source.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if source == "codex", event.kind == .accessRequest {
@@ -255,6 +275,8 @@ final class AgentEventManager: ObservableObject {
 
     private func defaultTTL(for kind: AgentEventKind) -> TimeInterval {
         switch kind {
+        case .clear:
+            return 1.5
         case .accessRequest, .waiting:
             return 2
         case .failed, .cancelled:
@@ -267,11 +289,17 @@ final class AgentEventManager: ObservableObject {
     }
 
     private func defaultTitle(for kind: AgentEventKind, source: String = "") -> String {
+        if kind == .clear {
+            return ""
+        }
+
         if kind == .completed {
             return "Job is done"
         }
 
         switch kind {
+        case .clear:
+            return ""
         case .accessRequest:
             if source.lowercased() == "codex" {
                 return "Need approval"

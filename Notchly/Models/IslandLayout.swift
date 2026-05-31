@@ -14,15 +14,33 @@ struct IslandLayout {
     let isMusicVolumeControlExpanded: Bool
     let closedHeight: CGFloat
     let islandWidth: CGFloat
+    let allowsCompactBaseWidth: Bool
+    let idleWidthOverride: CGFloat?
 
     let spacing: CGFloat = 10
 
     var baseWidth: CGFloat {
-        min(max(islandWidth, 280), 360)
+        min(max(islandWidth, allowsCompactBaseWidth ? 160 : 280), 360)
     }
 
     var closedSize: CGSize {
         CGSize(width: baseWidth, height: closedHeight)
+    }
+
+    var idleWidth: CGFloat {
+        if let idleWidthOverride {
+            return min(max(idleWidthOverride, 120), baseWidth)
+        }
+
+        return min(max(baseWidth * 0.58, 160), 210)
+    }
+
+    var idleSize: CGSize {
+        CGSize(width: idleWidth, height: closedHeight)
+    }
+
+    var idleHoverSize: CGSize {
+        CGSize(width: idleWidth + 8, height: closedHeight)
     }
 
     var openedSize: CGSize {
