@@ -9,7 +9,6 @@ import SwiftUI
 
 struct GeneralSettingsView: View {
     @ObservedObject var settingsManager: SettingsManager
-    @ObservedObject var codexHookIntegrationManager: CodexHookIntegrationManager
 
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
@@ -59,17 +58,59 @@ struct GeneralSettingsView: View {
 
                     SettingsDivider()
 
+                    SettingsToggleRow(
+                        title: "Lock Sound",
+                        subtitle: "Play a subtle sound when the lock screen state changes.",
+                        isOn: $settingsManager.enableLockSound
+                    )
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+}
+
+struct CodexSettingsView: View {
+    @ObservedObject var settingsManager: SettingsManager
+    @ObservedObject var codexHookIntegrationManager: CodexHookIntegrationManager
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            SettingsCard {
+                VStack(spacing: 0) {
                     CodexHookIntegrationRow(
                         manager: codexHookIntegrationManager
                     )
 
                     SettingsDivider()
 
-                    SettingsToggleRow(
-                        title: "Lock Sound",
-                        subtitle: "Play a subtle sound when the lock screen state changes.",
-                        isOn: $settingsManager.enableLockSound
-                    )
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("Job Done Duration")
+                                    .font(.system(size: 13, weight: .medium))
+
+                                Text("How long Codex completion alerts stay visible before returning to music.")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Spacer()
+
+                            Text(String(format: "%.1fs", settingsManager.codexCompletedAlertDuration))
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                        }
+
+                        Slider(
+                            value: $settingsManager.codexCompletedAlertDuration,
+                            in: 1.5...6.0,
+                            step: 0.1
+                        )
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
                 }
             }
         }

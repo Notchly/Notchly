@@ -303,7 +303,7 @@ mkdir -p "$events_dir"
 case "$event_type" in
   completed|stop)
     type="completed"
-    title="Job is done"
+    title="Task completed"
     message="Codex finished"
     ;;
   failed)
@@ -323,7 +323,7 @@ case "$event_type" in
     ;;
   *)
     type="completed"
-    title="Job is done"
+    title="Task completed"
     message="Codex finished"
     ;;
 esac

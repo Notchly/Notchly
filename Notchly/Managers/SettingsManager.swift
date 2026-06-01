@@ -65,6 +65,7 @@ final class SettingsManager: ObservableObject {
         static let showSoundLine = true
         static let soundLineWidth = 36.0
         static let showSoundPercent = true
+        static let codexCompletedAlertDuration = 2.2
     }
 
     @Published var showBattery: Bool {
@@ -154,6 +155,10 @@ final class SettingsManager: ObservableObject {
         didSet { UserDefaults.standard.set(showSoundPercent, forKey: "showSoundPercent") }
     }
 
+    @Published var codexCompletedAlertDuration: Double {
+        didSet { UserDefaults.standard.set(codexCompletedAlertDuration, forKey: "codexCompletedAlertDuration") }
+    }
+
     init() {
         self.showBattery = UserDefaults.standard.object(forKey: "showBattery") as? Bool ?? Defaults.showBattery
         self.showMusic = UserDefaults.standard.object(forKey: "showMusic") as? Bool ?? Defaults.showMusic
@@ -179,6 +184,7 @@ final class SettingsManager: ObservableObject {
         self.showSoundLine = UserDefaults.standard.object(forKey: "showSoundLine") as? Bool ?? Defaults.showSoundLine
         self.soundLineWidth = UserDefaults.standard.object(forKey: "soundLineWidth") as? Double ?? Defaults.soundLineWidth
         self.showSoundPercent = UserDefaults.standard.object(forKey: "showSoundPercent") as? Bool ?? Defaults.showSoundPercent
+        self.codexCompletedAlertDuration = UserDefaults.standard.object(forKey: "codexCompletedAlertDuration") as? Double ?? Defaults.codexCompletedAlertDuration
     }
 
     func refreshLaunchAtLoginStatus() {
@@ -222,6 +228,10 @@ final class SettingsManager: ObservableObject {
         musicPreviewDuration = Defaults.musicPreviewDuration
         enableSpotifyAppleScriptControl = Defaults.enableSpotifyAppleScriptControl
         enableAppleMusicAppleScriptControl = Defaults.enableAppleMusicAppleScriptControl
+    }
+
+    func resetCodexSettings() {
+        codexCompletedAlertDuration = Defaults.codexCompletedAlertDuration
     }
 
     private func applyLaunchAtLogin(_ enabled: Bool) {

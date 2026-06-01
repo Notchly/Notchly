@@ -155,10 +155,10 @@ extension ContentView {
     }
 
     func remainingAgentPresentationDelay() -> TimeInterval {
-        guard displayedAgentEvent?.kind == .completed else { return 0 }
+        guard let displayedAgentEvent, displayedAgentEvent.kind == .completed else { return 0 }
         guard let agentPresentationStartedAt else { return 0 }
 
-        let minimumDuration: TimeInterval = 3.4
+        let minimumDuration = displayedAgentEvent.ttl
         return max(0, minimumDuration - Date().timeIntervalSince(agentPresentationStartedAt))
     }
 
@@ -188,6 +188,7 @@ extension ContentView {
         showMusicVolumeControl = false
         isAgentMusicTransitionActive = false
         showsAgentMusicContent = false
+        hidesMusicContentDuringAgentReturn = false
 
         guard status != .agentPreview else { return }
 
@@ -273,6 +274,7 @@ extension ContentView {
             displayedAgentEvent = nil
             agentPresentationStartedAt = nil
             showsAgentMusicContent = false
+            hidesMusicContentDuringAgentReturn = false
             return
         }
 
@@ -306,8 +308,6 @@ extension ContentView {
                 guard agentEventManager.currentEvent == nil else { return }
                 agentCollapseShowsMusic = false
                 finishAgentMusicTransitionIfNeeded()
-                displayedAgentEvent = nil
-                agentPresentationStartedAt = nil
             }
         }
     }
@@ -315,24 +315,69 @@ extension ContentView {
     func finishAgentMusicTransitionIfNeeded() {
         guard isAgentMusicTransitionActive else { return }
 
-        let targetStatus = agentMusicReturnStatus
+        let targetStatus = resolvedAgentMusicReturnStatus()
+        let returnDuration = 0.52
 
-        isAgentMusicTransitionActive = false
+        hidesMusicContentDuringAgentReturn = true
+        showsAgentMusicContent = false
+        displayedAgentEvent = nil
+        agentPresentationStartedAt = nil
 
         guard settingsManager.showMusic,
               musicManager.hasNowPlayingContent else {
-            withAnimation(animation) {
+            withAnimation(.smooth(duration: returnDuration, extraBounce: 0)) {
                 status = .closed
+            }
+
+            agentMusicHideTask?.cancel()
+            agentMusicHideTask = Task {
+                try? await Task.sleep(for: .seconds(returnDuration))
+                guard !Task.isCancelled else { return }
+
+                await MainActor.run {
+                    isAgentMusicTransitionActive = false
+                    hidesMusicContentDuringAgentReturn = false
+                    agentMusicHideTask = nil
+                }
             }
             return
         }
 
-        withAnimation(.smooth(duration: 0.42, extraBounce: 0)) {
+        withAnimation(.smooth(duration: returnDuration, extraBounce: 0)) {
             status = targetStatus
         }
 
         if (targetStatus == .opened || targetStatus == .musicPreview) && !isPointerInsideIsland {
             scheduleAutoClose(after: 2.0)
+        }
+
+        agentMusicHideTask?.cancel()
+        agentMusicHideTask = Task {
+            try? await Task.sleep(for: .seconds(returnDuration * 0.82))
+            guard !Task.isCancelled else { return }
+
+            await MainActor.run {
+                guard agentEventManager.currentEvent == nil else { return }
+
+                isAgentMusicTransitionActive = false
+
+                withAnimation(.smooth(duration: 0.18, extraBounce: 0)) {
+                    hidesMusicContentDuringAgentReturn = false
+                }
+
+                agentMusicHideTask = nil
+            }
+        }
+    }
+
+    func resolvedAgentMusicReturnStatus() -> IslandStatus {
+        guard displayedAgentEvent?.kind != .completed else { return .closed }
+
+        switch agentMusicReturnStatus {
+        case .opened:
+            return .opened
+        default:
+            return .closed
         }
     }
 

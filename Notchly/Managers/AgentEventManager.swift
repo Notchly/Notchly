@@ -51,6 +51,7 @@ final class AgentEventManager: ObservableObject {
     @Published private(set) var currentEvent: AgentEvent?
     @Published private(set) var eventID = 0
 
+    private let settingsManager: SettingsManager
     private let fileManager = FileManager.default
     private var watchTask: Task<Void, Never>?
     private var clearTask: Task<Void, Never>?
@@ -64,6 +65,10 @@ final class AgentEventManager: ObservableObject {
 
     var eventsFileURL: URL {
         Self.eventsFileURL
+    }
+
+    init(settingsManager: SettingsManager) {
+        self.settingsManager = settingsManager
     }
 
     func publish(
@@ -93,7 +98,7 @@ final class AgentEventManager: ObservableObject {
             kind: kind,
             title: resolvedTitle,
             message: message?.trimmingCharacters(in: .whitespacesAndNewlines),
-            ttl: min(max(ttl ?? defaultTTL(for: kind), 1.5), 30),
+            ttl: resolvedTTL(for: kind, source: normalizedSource, payloadTTL: ttl),
             createdAt: Date()
         )
 
@@ -174,12 +179,12 @@ final class AgentEventManager: ObservableObject {
         let kind = payload.type ?? .completed
         let title = payload.title?.trimmingCharacters(in: .whitespacesAndNewlines)
         let message = payload.message?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let ttl = min(max(payload.ttl ?? defaultTTL(for: kind), 1.5), 30)
         let source = payload.source?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard isAllowedSource(source) else {
             debugLog("ignored unsupported source=\(source)")
             return nil
         }
+        let ttl = resolvedTTL(for: kind, source: source, payloadTTL: payload.ttl)
         let normalizedTitle = title?.isEmpty == false ? title : defaultTitle(for: kind, source: source)
 
         return AgentEvent(
@@ -273,6 +278,20 @@ final class AgentEventManager: ObservableObject {
         ].joined(separator: "|")
     }
 
+    private func resolvedTTL(
+        for kind: AgentEventKind,
+        source: String,
+        payloadTTL: TimeInterval?
+    ) -> TimeInterval {
+        let normalizedSource = source.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+
+        if normalizedSource == "codex", kind == .completed {
+            return min(max(settingsManager.codexCompletedAlertDuration, 1.5), 8)
+        }
+
+        return min(max(payloadTTL ?? defaultTTL(for: kind), 1.5), 30)
+    }
+
     private func defaultTTL(for kind: AgentEventKind) -> TimeInterval {
         switch kind {
         case .clear:
@@ -294,7 +313,7 @@ final class AgentEventManager: ObservableObject {
         }
 
         if kind == .completed {
-            return "Job is done"
+            return "Task completed"
         }
 
         switch kind {

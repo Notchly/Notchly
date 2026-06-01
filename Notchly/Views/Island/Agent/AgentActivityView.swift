@@ -39,7 +39,7 @@ struct AgentActivityView: View {
     }
 
     private var secondaryText: String {
-        event?.title ?? "Job is done"
+        event?.title ?? "Task completed"
     }
 
     private var showsTrailingWaveform: Bool {

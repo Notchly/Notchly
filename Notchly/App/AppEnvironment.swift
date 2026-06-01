@@ -27,7 +27,7 @@ final class AppEnvironment {
     let settingsManager = SettingsManager()
     let focusManager = FocusManager()
     let brightnessManager = BrightnessManager()
-    let agentEventManager = AgentEventManager()
+    lazy var agentEventManager = AgentEventManager(settingsManager: settingsManager)
     let codexHookIntegrationManager = CodexHookIntegrationManager()
     let lockScreenOverlayModel = LockScreenOverlayModel()
 

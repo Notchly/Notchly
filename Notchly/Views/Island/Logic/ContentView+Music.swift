@@ -27,7 +27,7 @@ extension ContentView {
             shadowOpacity: status == .opened || status == .popping ? 0.2 : 0,
             showsTopCornerCutouts: !hasPendingAgentEvent
         ) {
-            if !hasPendingAgentEvent && (status == .closed ||
+            if !hidesMusicContentDuringAgentReturn && !hasPendingAgentEvent && (status == .closed ||
                 status == .popping ||
                 (status == .focusCollapse && focusCollapseShowsMusic && !hidesFocusStatusContentDuringReturn) ||
                 (status == .brightnessCollapse && brightnessCollapseShowsMusic && !hidesBrightnessStatusContentDuringReturn) ||
@@ -45,7 +45,7 @@ extension ContentView {
                 .zIndex(1)
             }
 
-            if !hasPendingAgentEvent && status == .musicPreview {
+            if !hidesMusicContentDuringAgentReturn && !hasPendingAgentEvent && status == .musicPreview {
                 PreviewMusicView(
                     artwork: musicManager.artworkImage,
                     combinedPreviewText: combinedPreviewText,
@@ -114,7 +114,7 @@ extension ContentView {
                 .zIndex(4)
             }
 
-            if status == .opened {
+            if !hidesMusicContentDuringAgentReturn && status == .opened {
                 ExpandedMusicView(
                     artwork: musicManager.artworkImage,
                     artworkTransitionKey: artworkTransitionKey,
@@ -353,6 +353,25 @@ extension ContentView {
                     status = .closed
                 }
             }
+        }
+    }
+
+    func handleMusicPlaybackChange(isPlaying: Bool) {
+        guard settingsManager.showMusic else { return }
+
+        if isPlaying {
+            handleMusicAutoExpand(isPlaying: true)
+            return
+        }
+
+        guard status == .musicPreview else { return }
+
+        autoExpandMusicTask?.cancel()
+        autoExpandMusicTask = nil
+        previewAutoCloseKey = ""
+
+        withAnimation(animation) {
+            status = .closed
         }
     }
 

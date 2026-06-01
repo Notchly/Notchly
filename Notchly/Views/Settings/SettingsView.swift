@@ -41,7 +41,7 @@ struct SettingsView: View {
 
                     sidebarGroup(
                         title: "Live Activities",
-                        sections: [.music]
+                        sections: [.music, .codex]
                     )
 
                     sidebarGroup(
@@ -219,10 +219,7 @@ struct SettingsView: View {
     private var selectedContent: some View {
         switch selectedSection {
         case .general:
-            GeneralSettingsView(
-                settingsManager: settingsManager,
-                codexHookIntegrationManager: codexHookIntegrationManager
-            )
+            GeneralSettingsView(settingsManager: settingsManager)
 
         case .focus:
             FocusSettingsView(settingsManager: settingsManager)
@@ -238,6 +235,12 @@ struct SettingsView: View {
 
         case .music:
             MusicSettingsView(settingsManager: settingsManager)
+
+        case .codex:
+            CodexSettingsView(
+                settingsManager: settingsManager,
+                codexHookIntegrationManager: codexHookIntegrationManager
+            )
             
         case .about:
               AboutSettingsView()
@@ -289,6 +292,8 @@ struct SettingsView: View {
                 settingsManager.resetBatterySettings()
             case .music:
                 settingsManager.resetMusicSettings()
+            case .codex:
+                settingsManager.resetCodexSettings()
             }
         }
     }

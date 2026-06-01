@@ -56,6 +56,7 @@ struct ContentView: View {
     @State var agentPresentationStartedAt: Date?
     @State var agentDismissTask: Task<Void, Never>?
     @State var showsAgentMusicContent = false
+    @State var hidesMusicContentDuringAgentReturn = false
     @State var agentMusicHideTask: Task<Void, Never>?
     @State var agentCollapseShowsMusic = true
     @State var musicStartUsesIdleWidth = false
@@ -111,7 +112,8 @@ struct ContentView: View {
             playPendingBrightnessEventIfReady()
             playPendingVolumeEventIfReady()
         }
-        .onChange(of: musicManager.isPlaying) { _, _ in
+        .onChange(of: musicManager.isPlaying) { _, isPlaying in
+            handleMusicPlaybackChange(isPlaying: isPlaying)
             playPendingFocusEventIfReady()
             playPendingBrightnessEventIfReady()
             playPendingVolumeEventIfReady()
