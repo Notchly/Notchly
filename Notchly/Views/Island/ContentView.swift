@@ -29,19 +29,23 @@ struct ContentView: View {
     @State var focusReturnStatus: IslandStatus = .closed
     @State var focusCollapseShowsMusic = true
     @State var focusStatusIsActive = false
+    @State var hidesFocusStatusContentDuringReturn = false
     @State var pendingFocusEventIsActive = false
     @State var pendingFocusEventTimestamp: TimeInterval?
     @State var brightnessStatusTask: Task<Void, Never>?
     @State var brightnessReturnStatus: IslandStatus = .closed
     @State var brightnessCollapseShowsMusic = true
+    @State var hidesBrightnessStatusContentDuringReturn = false
     @State var pendingBrightnessEventTimestamp: TimeInterval?
     @State var lastBrightnessStatusEventTime: TimeInterval = 0
     @State var volumeStatusTask: Task<Void, Never>?
     @State var volumeReturnStatus: IslandStatus = .closed
     @State var volumeCollapseShowsMusic = true
+    @State var hidesVolumeStatusContentDuringReturn = false
     @State var pendingVolumeEventTimestamp: TimeInterval?
     @State var lastVolumeStatusEventTime: TimeInterval = 0
     @State var musicScrollGestureState: Int = 0
+    @State var lastMusicTrackSwipeTime: TimeInterval = 0
     @State var isPointerInsideIsland = false
     @State var playPauseBounce = false
     @State var skipIndicator: String?
@@ -49,6 +53,8 @@ struct ContentView: View {
     @State var isAgentMusicTransitionActive = false
     @State var agentMusicReturnStatus: IslandStatus = .closed
     @State var displayedAgentEvent: AgentEvent?
+    @State var agentPresentationStartedAt: Date?
+    @State var agentDismissTask: Task<Void, Never>?
     @State var showsAgentMusicContent = false
     @State var agentMusicHideTask: Task<Void, Never>?
     @State var agentCollapseShowsMusic = true

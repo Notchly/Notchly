@@ -22,6 +22,10 @@ extension ContentView {
         musicEndWidthTask?.cancel()
         musicEndWidthTask = nil
         musicEndKeepsFullWidth = false
+        lastMusicTrackSwipeTime = 0
+        agentDismissTask?.cancel()
+        agentDismissTask = nil
+        agentPresentationStartedAt = nil
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
             hasFinishedInitialAppear = true
@@ -115,15 +119,56 @@ extension ContentView {
 
     func handleAgentEventChange(_ event: AgentEvent?) {
         if let event {
+            agentDismissTask?.cancel()
+            agentDismissTask = nil
             agentMusicHideTask?.cancel()
             displayedAgentEvent = event
+            agentPresentationStartedAt = Date()
             if canShowAgentOverMusic {
                 beginAgentMusicTransitionIfNeeded()
             } else {
                 beginStandaloneAgentPresentation()
             }
         } else {
+            dismissAgentPresentationAfterMinimumDelay()
+        }
+    }
+
+    func dismissAgentPresentationAfterMinimumDelay() {
+        let remainingDelay = remainingAgentPresentationDelay()
+
+        guard remainingDelay > 0 else {
+            performAgentPresentationDismissal()
+            return
+        }
+
+        agentDismissTask?.cancel()
+        agentDismissTask = Task {
+            try? await Task.sleep(for: .seconds(remainingDelay))
+            guard !Task.isCancelled else { return }
+
+            await MainActor.run {
+                guard agentEventManager.currentEvent == nil else { return }
+                performAgentPresentationDismissal()
+            }
+        }
+    }
+
+    func remainingAgentPresentationDelay() -> TimeInterval {
+        guard displayedAgentEvent?.kind == .completed else { return 0 }
+        guard let agentPresentationStartedAt else { return 0 }
+
+        let minimumDuration: TimeInterval = 3.4
+        return max(0, minimumDuration - Date().timeIntervalSince(agentPresentationStartedAt))
+    }
+
+    func performAgentPresentationDismissal() {
+        agentDismissTask?.cancel()
+        agentDismissTask = nil
+
+        if isAgentMusicTransitionActive {
             hideAgentMusicContent()
+        } else {
             hideStandaloneAgentPresentationIfNeeded()
         }
     }
@@ -155,14 +200,28 @@ extension ContentView {
         guard !isAgentMusicTransitionActive else { return }
         guard status == .agentPreview || status == .agentCollapse else {
             displayedAgentEvent = nil
+            agentPresentationStartedAt = nil
             return
         }
 
-        withAnimation(.smooth(duration: 0.34, extraBounce: 0)) {
+        let closeDuration = 0.34
+
+        withAnimation(.smooth(duration: closeDuration, extraBounce: 0)) {
             status = .closed
         }
 
-        displayedAgentEvent = nil
+        agentDismissTask?.cancel()
+        agentDismissTask = Task {
+            try? await Task.sleep(for: .seconds(closeDuration))
+            guard !Task.isCancelled else { return }
+
+            await MainActor.run {
+                guard agentEventManager.currentEvent == nil else { return }
+                displayedAgentEvent = nil
+                agentPresentationStartedAt = nil
+                agentDismissTask = nil
+            }
+        }
     }
 
     func beginAgentMusicTransitionIfNeeded() {
@@ -212,6 +271,7 @@ extension ContentView {
     func hideAgentMusicContent() {
         guard isAgentMusicTransitionActive else {
             displayedAgentEvent = nil
+            agentPresentationStartedAt = nil
             showsAgentMusicContent = false
             return
         }
@@ -247,6 +307,7 @@ extension ContentView {
                 agentCollapseShowsMusic = false
                 finishAgentMusicTransitionIfNeeded()
                 displayedAgentEvent = nil
+                agentPresentationStartedAt = nil
             }
         }
     }
@@ -402,6 +463,7 @@ extension ContentView {
         autoExpandMusicTask?.cancel()
         showMusicVolumeControl = false
         focusStatusIsActive = isActive
+        hidesFocusStatusContentDuringReturn = false
         pendingBrightnessEventTimestamp = nil
         pendingVolumeEventTimestamp = nil
 
@@ -415,11 +477,13 @@ extension ContentView {
 
         if status == .brightnessPreview || status == .brightnessCollapse {
             brightnessCollapseShowsMusic = true
+            hidesBrightnessStatusContentDuringReturn = false
             status = brightnessReturnStatus
         }
 
         if status == .volumePreview || status == .volumeCollapse {
             volumeCollapseShowsMusic = true
+            hidesVolumeStatusContentDuringReturn = false
             status = volumeReturnStatus
         }
 
@@ -482,6 +546,7 @@ extension ContentView {
                 guard status == .focusPreview else { return }
 
                 focusCollapseShowsMusic = false
+                hidesFocusStatusContentDuringReturn = true
 
                 withAnimation(.smooth(duration: collapseDuration, extraBounce: 0)) {
                     status = .focusCollapse
@@ -496,9 +561,10 @@ extension ContentView {
                 guard status == .focusCollapse else { return }
 
                 focusCollapseShowsMusic = true
+                hidesFocusStatusContentDuringReturn = false
                 focusStatusTask = nil
 
-                withAnimation(.smooth(duration: 0.42, extraBounce: 0)) {
+                withAnimation(.smooth(duration: 0.64, extraBounce: 0)) {
                     status = returnStatus
                 }
 
@@ -575,16 +641,19 @@ extension ContentView {
         volumeStatusTask?.cancel()
         autoExpandMusicTask?.cancel()
         showMusicVolumeControl = false
+        hidesBrightnessStatusContentDuringReturn = false
         pendingFocusEventTimestamp = nil
         pendingVolumeEventTimestamp = nil
 
         if status == .focusPreview || status == .focusCollapse {
             focusCollapseShowsMusic = true
+            hidesFocusStatusContentDuringReturn = false
             status = focusReturnStatus
         }
 
         if status == .volumePreview || status == .volumeCollapse {
             volumeCollapseShowsMusic = true
+            hidesVolumeStatusContentDuringReturn = false
             status = volumeReturnStatus
         }
 
@@ -660,6 +729,7 @@ extension ContentView {
                 guard status == .brightnessPreview else { return }
 
                 brightnessCollapseShowsMusic = false
+                hidesBrightnessStatusContentDuringReturn = true
 
                 withAnimation(.smooth(duration: collapseDuration, extraBounce: 0)) {
                     status = .brightnessCollapse
@@ -674,9 +744,10 @@ extension ContentView {
                 guard status == .brightnessCollapse else { return }
 
                 brightnessCollapseShowsMusic = true
+                hidesBrightnessStatusContentDuringReturn = false
                 brightnessStatusTask = nil
 
-                withAnimation(.smooth(duration: 0.42, extraBounce: 0)) {
+                withAnimation(.smooth(duration: 0.64, extraBounce: 0)) {
                     status = returnStatus
                 }
 
@@ -753,16 +824,19 @@ extension ContentView {
         brightnessStatusTask?.cancel()
         autoExpandMusicTask?.cancel()
         showMusicVolumeControl = false
+        hidesVolumeStatusContentDuringReturn = false
         pendingFocusEventTimestamp = nil
         pendingBrightnessEventTimestamp = nil
 
         if status == .focusPreview || status == .focusCollapse {
             focusCollapseShowsMusic = true
+            hidesFocusStatusContentDuringReturn = false
             status = focusReturnStatus
         }
 
         if status == .brightnessPreview || status == .brightnessCollapse {
             brightnessCollapseShowsMusic = true
+            hidesBrightnessStatusContentDuringReturn = false
             status = brightnessReturnStatus
         }
 
@@ -838,6 +912,7 @@ extension ContentView {
                 guard status == .volumePreview else { return }
 
                 volumeCollapseShowsMusic = false
+                hidesVolumeStatusContentDuringReturn = true
 
                 withAnimation(.smooth(duration: collapseDuration, extraBounce: 0)) {
                     status = .volumeCollapse
@@ -852,9 +927,10 @@ extension ContentView {
                 guard status == .volumeCollapse else { return }
 
                 volumeCollapseShowsMusic = true
+                hidesVolumeStatusContentDuringReturn = false
                 volumeStatusTask = nil
 
-                withAnimation(.smooth(duration: 0.42, extraBounce: 0)) {
+                withAnimation(.smooth(duration: 0.64, extraBounce: 0)) {
                     status = returnStatus
                 }
 
@@ -874,6 +950,7 @@ extension ContentView {
 
         let updates = {
             focusCollapseShowsMusic = true
+            hidesFocusStatusContentDuringReturn = false
             status = focusReturnStatus
         }
 
@@ -893,6 +970,7 @@ extension ContentView {
 
         let updates = {
             brightnessCollapseShowsMusic = true
+            hidesBrightnessStatusContentDuringReturn = false
             status = brightnessReturnStatus
         }
 
@@ -912,6 +990,7 @@ extension ContentView {
 
         let updates = {
             volumeCollapseShowsMusic = true
+            hidesVolumeStatusContentDuringReturn = false
             status = volumeReturnStatus
         }
 

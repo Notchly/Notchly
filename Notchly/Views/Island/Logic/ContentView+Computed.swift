@@ -129,12 +129,11 @@ extension ContentView {
 
     var effectiveIslandWidth: CGFloat {
         guard musicStartUsesIdleWidth,
-              dynamicManager.currentModule == .music,
               status == .closed else {
             return CGFloat(settingsManager.islandWidth)
         }
 
-        return configuredIdleIslandWidth
+        return configuredIdleIslandWidth + (isHovered ? 8 : 0)
     }
 
     var usesIdleNotchSize: Bool {
@@ -142,8 +141,8 @@ extension ContentView {
         guard agentEventManager.currentEvent == nil else { return false }
         guard !showChargingPop else { return false }
         guard !musicEndKeepsFullWidth else { return false }
+        guard !musicStartUsesIdleWidth else { return true }
         guard !musicManager.hasNowPlayingContent else { return false }
-        guard !musicManager.isResolvingNowPlaying else { return false }
 
         return dynamicManager.currentModule == .none || dynamicManager.currentModule == .battery
     }

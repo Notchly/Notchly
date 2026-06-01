@@ -29,9 +29,9 @@ extension ContentView {
         ) {
             if !hasPendingAgentEvent && (status == .closed ||
                 status == .popping ||
-                (status == .focusCollapse && focusCollapseShowsMusic) ||
-                (status == .brightnessCollapse && brightnessCollapseShowsMusic) ||
-                (status == .volumeCollapse && volumeCollapseShowsMusic)) {
+                (status == .focusCollapse && focusCollapseShowsMusic && !hidesFocusStatusContentDuringReturn) ||
+                (status == .brightnessCollapse && brightnessCollapseShowsMusic && !hidesBrightnessStatusContentDuringReturn) ||
+                (status == .volumeCollapse && volumeCollapseShowsMusic && !hidesVolumeStatusContentDuringReturn)) {
                 CompactMusicView(
                     artwork: musicManager.artworkImage,
                     waveformColor: musicManager.waveformColor,
@@ -79,7 +79,7 @@ extension ContentView {
                 .zIndex(5)
             }
 
-            if status == .focusPreview || (status == .focusCollapse && !focusCollapseShowsMusic) {
+            if status == .focusPreview || (status == .focusCollapse && !focusCollapseShowsMusic && !hidesFocusStatusContentDuringReturn) {
                 FocusMusicStatusView(
                     isActive: focusStatusIsActive,
                     hidesLabel: settingsManager.hideFocusLabel,
@@ -89,7 +89,7 @@ extension ContentView {
                 .zIndex(4)
             }
 
-            if status == .brightnessPreview || (status == .brightnessCollapse && !brightnessCollapseShowsMusic) {
+            if status == .brightnessPreview || (status == .brightnessCollapse && !brightnessCollapseShowsMusic && !hidesBrightnessStatusContentDuringReturn) {
                 BrightnessStatusView(
                     brightness: brightnessManager.brightnessLevel,
                     lineWidth: CGFloat(settingsManager.brightnessLineWidth),
@@ -101,7 +101,7 @@ extension ContentView {
                 .zIndex(4)
             }
 
-            if status == .volumePreview || (status == .volumeCollapse && !volumeCollapseShowsMusic) {
+            if status == .volumePreview || (status == .volumeCollapse && !volumeCollapseShowsMusic && !hidesVolumeStatusContentDuringReturn) {
                 VolumeStatusView(
                     volume: musicManager.outputVolume,
                     isMuted: musicManager.isOutputMuted,
@@ -240,6 +240,7 @@ extension ContentView {
         let horizontalTriggerThreshold: CGFloat = 14
         let verticalTriggerThreshold: CGFloat = 8
         let resetThreshold: CGFloat = 2
+        let trackSwipeCooldown: TimeInterval = 0.75
 
         if abs(deltaX) <= resetThreshold && abs(deltaY) <= resetThreshold {
             musicScrollGestureState = 0
@@ -248,7 +249,11 @@ extension ContentView {
 
         if abs(deltaX) > abs(deltaY) {
             if deltaX < -horizontalTriggerThreshold, musicScrollGestureState == 0 {
+                let now = Date.timeIntervalSinceReferenceDate
+                guard now - lastMusicTrackSwipeTime >= trackSwipeCooldown else { return }
+
                 musicScrollGestureState = 1
+                lastMusicTrackSwipeTime = now
                 autoExpandMusicTask?.cancel()
                 performHapticFeedback()
                 showSkipIndicator("forward.fill")
@@ -259,7 +264,11 @@ extension ContentView {
             }
 
             if deltaX > horizontalTriggerThreshold, musicScrollGestureState == 0 {
+                let now = Date.timeIntervalSinceReferenceDate
+                guard now - lastMusicTrackSwipeTime >= trackSwipeCooldown else { return }
+
                 musicScrollGestureState = -1
+                lastMusicTrackSwipeTime = now
                 autoExpandMusicTask?.cancel()
                 performHapticFeedback()
                 showSkipIndicator("backward.fill")
@@ -304,6 +313,7 @@ extension ContentView {
         guard dynamicManager.currentModule == .music else { return }
         guard isPlaying else { return }
         guard settingsManager.showMusic else { return }
+        guard status == .closed || status == .musicPreview || status == .opened else { return }
 
         let key = currentMusicAutoOpenKey
         guard !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }

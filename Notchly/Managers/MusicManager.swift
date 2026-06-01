@@ -208,7 +208,7 @@ final class MusicManager: ObservableObject {
     }
 
     @MainActor
-    private func apply(_ trackInfo: TrackInfo) {
+    private func apply(_ trackInfo: TrackInfo, allowsPausedSourceLookup: Bool = true) {
         let payload = trackInfo.payload
 
         let newTrackTitle = payload.title ?? ""
@@ -229,12 +229,20 @@ final class MusicManager: ObservableObject {
             if isResolvingNowPlaying {
                 isResolvingNowPlaying = false
             }
-            scheduleActiveSourceRefresh(ignoring: bundleIdentifier, clearsCurrentIfNoActiveSource: true)
+            scheduleActiveSourceRefresh(
+                ignoring: bundleIdentifier,
+                fallbackPausedTrackInfo: nil,
+                clearsCurrentIfNoActiveSource: true
+            )
             return
         }
 
-        if !playing {
-            scheduleActiveSourceRefresh(ignoring: bundleIdentifier)
+        if !playing, allowsPausedSourceLookup {
+            scheduleActiveSourceRefresh(
+                ignoring: bundleIdentifier,
+                fallbackPausedTrackInfo: trackInfo
+            )
+            return
         }
 
         let newTrackIdentity = [
@@ -713,13 +721,18 @@ final class MusicManager: ObservableObject {
 
     @MainActor
     private func scheduleActiveSourceRefresh(ignoring ignoredBundleIdentifier: String) {
-        scheduleActiveSourceRefresh(ignoring: ignoredBundleIdentifier, clearsCurrentIfNoActiveSource: false)
+        scheduleActiveSourceRefresh(
+            ignoring: ignoredBundleIdentifier,
+            fallbackPausedTrackInfo: nil,
+            clearsCurrentIfNoActiveSource: false
+        )
     }
 
     @MainActor
     private func scheduleActiveSourceRefresh(
         ignoring ignoredBundleIdentifier: String,
-        clearsCurrentIfNoActiveSource: Bool
+        fallbackPausedTrackInfo: TrackInfo? = nil,
+        clearsCurrentIfNoActiveSource: Bool = false
     ) {
         if clearsCurrentIfNoActiveSource {
             activeSourceRefreshShouldClearIfEmpty = true
@@ -749,6 +762,8 @@ final class MusicManager: ObservableObject {
                        self.currentPlayerBundleIdentifier == sourceBundleIdentifierAtScan,
                        self.currentTrackIdentity == trackIdentityAtScan {
                         self.clearPlaybackState()
+                    } else if let fallbackPausedTrackInfo {
+                        self.apply(fallbackPausedTrackInfo, allowsPausedSourceLookup: false)
                     }
                     return
                 }
