@@ -310,7 +310,7 @@ extension ContentView {
 
     func handleMusicAutoExpand(isPlaying: Bool) {
         guard !isAgentAlertBlockingOtherEvents else { return }
-        guard dynamicManager.currentModule == .music else { return }
+        guard dynamicManager.currentModule == .music || musicManager.hasNowPlayingContent else { return }
         guard isPlaying else { return }
         guard settingsManager.showMusic else { return }
         guard status == .closed || status == .musicPreview || status == .opened else { return }
@@ -318,11 +318,45 @@ extension ContentView {
         let key = currentMusicAutoOpenKey
         guard !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
 
+        if stagedMusicAutoOpenKey == key && status == .closed {
+            return
+        }
+
+        let shouldStageClosedMusicPreview =
+            status == .closed &&
+            (musicStartUsesIdleWidth || lastMusicAutoOpenKey.isEmpty || dynamicManager.currentModule != .music)
+
+        if shouldStageClosedMusicPreview {
+            stagedMusicAutoOpenKey = key
+            autoExpandMusicTask?.cancel()
+
+            autoExpandMusicTask = Task {
+                try? await Task.sleep(for: .milliseconds(520))
+                guard !Task.isCancelled else { return }
+
+                await MainActor.run {
+                    guard musicManager.isPlaying else { return }
+                    guard musicManager.hasNowPlayingContent else { return }
+                    guard status == .closed else { return }
+                    guard stagedMusicAutoOpenKey == key else { return }
+
+                    stagedMusicAutoOpenKey = ""
+                    openMusicPreview(for: key)
+                }
+            }
+            return
+        }
+
         if lastMusicAutoOpenKey == key && (status == .musicPreview || status == .opened) {
             return
         }
 
+        openMusicPreview(for: key)
+    }
+
+    func openMusicPreview(for key: String) {
         lastMusicAutoOpenKey = key
+        stagedMusicAutoOpenKey = ""
         autoExpandMusicTask?.cancel()
 
         if status == .opened {
@@ -345,7 +379,7 @@ extension ContentView {
 
             await MainActor.run {
                 guard !isAgentAlertBlockingOtherEvents else { return }
-                guard dynamicManager.currentModule == .music else { return }
+                guard dynamicManager.currentModule == .music || musicManager.hasNowPlayingContent else { return }
                 guard status == .musicPreview else { return }
                 guard previewAutoCloseKey == scheduledKey else { return }
 

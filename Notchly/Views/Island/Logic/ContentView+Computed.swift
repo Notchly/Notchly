@@ -42,6 +42,10 @@ extension ContentView {
                 status == .volumeCollapse ||
                 status == .volumePreview {
                 musicContainer
+            } else if settingsManager.showMusic &&
+                musicManager.hasNowPlayingContent &&
+                (musicStartUsesIdleWidth || !stagedMusicAutoOpenKey.isEmpty) {
+                musicContainer
             } else {
                 switch dynamicManager.currentModule {
                 case .agent:

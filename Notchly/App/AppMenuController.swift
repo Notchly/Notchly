@@ -12,7 +12,6 @@ import Sparkle
 final class AppMenuController: NSObject {
     private var statusItem: NSStatusItem?
     private var hasStartedUpdater = false
-    private var scheduledUpdaterStartTask: Task<Void, Never>?
 
     private let settingsWindow: SettingsWindow
     private let updaterController: SPUStandardUpdaterController
@@ -40,11 +39,6 @@ final class AppMenuController: NSObject {
         }
 
         item.menu = makeMenu()
-        scheduleUpdaterStart()
-    }
-
-    deinit {
-        scheduledUpdaterStartTask?.cancel()
     }
 
     private func makeMenu() -> NSMenu {
@@ -125,17 +119,6 @@ final class AppMenuController: NSObject {
 
     @objc private func quitApp() {
         NSApp.terminate(nil)
-    }
-
-    private func scheduleUpdaterStart() {
-        guard scheduledUpdaterStartTask == nil else { return }
-
-        scheduledUpdaterStartTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: 5_000_000_000)
-            guard !Task.isCancelled else { return }
-            self?.startUpdaterIfNeeded()
-            self?.scheduledUpdaterStartTask = nil
-        }
     }
 
     private func startUpdaterIfNeeded() {

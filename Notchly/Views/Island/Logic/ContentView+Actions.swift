@@ -19,6 +19,7 @@ extension ContentView {
         musicStartWidthTask?.cancel()
         musicStartWidthTask = nil
         musicStartUsesIdleWidth = false
+        stagedMusicAutoOpenKey = ""
         musicEndWidthTask?.cancel()
         musicEndWidthTask = nil
         musicEndKeepsFullWidth = false
@@ -54,6 +55,7 @@ extension ContentView {
 
         guard hasNowPlayingContent else {
             musicStartUsesIdleWidth = false
+            stagedMusicAutoOpenKey = ""
             beginMusicEndWidthTransitionIfNeeded()
             return
         }
@@ -65,6 +67,12 @@ extension ContentView {
         guard activeAgentEvent == nil else { return }
 
         musicStartUsesIdleWidth = true
+
+        if musicManager.isPlaying {
+            Task { @MainActor in
+                handleMusicAutoExpand(isPlaying: true)
+            }
+        }
 
         musicStartWidthTask = Task {
             try? await Task.sleep(for: .milliseconds(120))

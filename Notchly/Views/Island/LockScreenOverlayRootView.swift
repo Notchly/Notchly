@@ -13,6 +13,7 @@ struct LockScreenOverlayRootView: View {
 
     let musicManager: MusicManager
     let screenSize: CGSize
+    let lockScreenPlayerYPosition: CGFloat
     let initialClosedHeight: CGFloat
 
     @State private var displayedState: LockScreenOverlayState = .locked
@@ -33,12 +34,14 @@ struct LockScreenOverlayRootView: View {
         settingsManager: SettingsManager,
         musicManager: MusicManager,
         screenSize: CGSize,
+        lockScreenPlayerYPosition: CGFloat,
         initialClosedHeight: CGFloat
     ) {
         self.model = model
         self.settingsManager = settingsManager
         self.musicManager = musicManager
         self.screenSize = screenSize
+        self.lockScreenPlayerYPosition = lockScreenPlayerYPosition
         self.initialClosedHeight = initialClosedHeight
 
         let initialState = model.state
@@ -56,10 +59,7 @@ struct LockScreenOverlayRootView: View {
     }
 
     private let unlockAnimationDuration: TimeInterval = 0.18
-
-    private var lockScreenPlayerYPosition: CGFloat {
-        min(max(screenSize.height * 0.68, 500), screenSize.height - 130)
-    }
+    private let playerHideAnimationDuration: TimeInterval = 0.18
 
     private var isLockScreenPlayerVisible: Bool {
         displayedState == .locked && showLockScreenPlayer
@@ -90,8 +90,8 @@ struct LockScreenOverlayRootView: View {
                 )
                 .position(x: screenSize.width / 2, y: lockScreenPlayerYPosition)
                 .opacity(isLockScreenPlayerVisible ? 1 : 0)
-                .scaleEffect(isLockScreenPlayerVisible ? 1 : 0.96)
-                .offset(y: isLockScreenPlayerVisible ? 0 : 18)
+                .scaleEffect(isLockScreenPlayerVisible ? 1 : 0.99)
+                .offset(y: isLockScreenPlayerVisible ? 0 : 26)
                 .allowsHitTesting(isLockScreenPlayerVisible)
                 .zIndex(1)
             }
@@ -111,7 +111,7 @@ struct LockScreenOverlayRootView: View {
         .frame(width: screenSize.width, height: screenSize.height)
         .ignoresSafeArea(.all)
         .animation(.easeOut(duration: 0.16), value: displayedState)
-        .animation(.easeOut(duration: 0.12), value: showLockScreenPlayer)
+        .animation(.easeInOut(duration: playerHideAnimationDuration), value: showLockScreenPlayer)
         .onAppear {
             displayedState = model.state
             renderLockScreenPlayer = model.state == .locked
@@ -239,7 +239,7 @@ struct LockScreenOverlayRootView: View {
         removePlayerTask?.cancel()
 
         if showLockScreenPlayer {
-            withAnimation(.easeOut(duration: 0.12)) {
+            withAnimation(.easeInOut(duration: playerHideAnimationDuration)) {
                 isArtworkExpanded = false
                 showLockScreenPlayer = false
             }
@@ -254,7 +254,7 @@ struct LockScreenOverlayRootView: View {
         }
 
         removePlayerTask = newRemovePlayerTask
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.16, execute: newRemovePlayerTask)
+        DispatchQueue.main.asyncAfter(deadline: .now() + playerHideAnimationDuration + 0.02, execute: newRemovePlayerTask)
     }
 
 }

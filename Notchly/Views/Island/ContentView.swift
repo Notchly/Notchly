@@ -25,6 +25,7 @@ struct ContentView: View {
     @State var autoExpandMusicTask: Task<Void, Never>?
     @State var focusStatusTask: Task<Void, Never>?
     @State var lastMusicAutoOpenKey: String = ""
+    @State var stagedMusicAutoOpenKey: String = ""
     @State var lastMusicPauseDate: Date?
     @State var previewAutoCloseKey: String = ""
     @State var focusReturnStatus: IslandStatus = .closed

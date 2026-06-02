@@ -66,9 +66,12 @@ final class MusicManager: ObservableObject {
     private var pendingShuffleStateUntil: Date?
     private var lastActiveSourceScanTime: TimeInterval = 0
     private var activeSourceRefreshShouldClearIfEmpty = false
+    private var cachedOutputMuted: Bool = false
+    private var lastOutputMutePollTime: TimeInterval = 0
 
     private let progressTickInterval: TimeInterval = 1.0
     private let volumePollInterval: TimeInterval = 0.22
+    private let outputMutePollInterval: TimeInterval = 1.0
     private let outputVolumeEventThreshold = 0.045
     private let activeSourceScanThrottle: TimeInterval = 1.2
 
@@ -277,6 +280,12 @@ final class MusicManager: ObservableObject {
         if albumTitle != newAlbumTitle {
             albumTitle = newAlbumTitle
         }
+
+        if !playing {
+            currentPlaybackRate = 0
+            stopProgressTimer()
+        }
+
         if isPlaying != playing {
             isPlaying = playing
         }
@@ -646,7 +655,13 @@ final class MusicManager: ObservableObject {
             }
         }
 
-        let muted = SystemOutputVolume.isMuted() ?? false
+        let now = Date.timeIntervalSinceReferenceDate
+        if now - lastOutputMutePollTime >= outputMutePollInterval {
+            cachedOutputMuted = SystemOutputVolume.isMuted() ?? false
+            lastOutputMutePollTime = now
+        }
+
+        let muted = cachedOutputMuted
         let nextMuted = muted || nextVolume <= 0.01
 
         let currentDisplayVolume = nextMuted ? 0 : nextVolume
@@ -1002,6 +1017,9 @@ private enum SystemOutputVolume {
     private static let mainElement = AudioObjectPropertyElement(kAudioObjectPropertyElementMain)
     private static let leftElement = AudioObjectPropertyElement(1)
     private static let rightElement = AudioObjectPropertyElement(2)
+    private static let defaultDeviceCacheDuration: TimeInterval = 5
+    private static var cachedDefaultOutputDeviceID: AudioDeviceID?
+    private static var cachedDefaultOutputDeviceReadTime: TimeInterval = 0
 
     static func currentVolume() -> Double? {
         guard let deviceID = defaultOutputDeviceID() else { return nil }
@@ -1103,6 +1121,12 @@ private enum SystemOutputVolume {
     }
 
     private static func defaultOutputDeviceID() -> AudioDeviceID? {
+        let now = Date.timeIntervalSinceReferenceDate
+        if let cachedDefaultOutputDeviceID,
+           now - cachedDefaultOutputDeviceReadTime < defaultDeviceCacheDuration {
+            return cachedDefaultOutputDeviceID
+        }
+
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDefaultOutputDevice,
             mScope: kAudioObjectPropertyScopeGlobal,
@@ -1121,9 +1145,13 @@ private enum SystemOutputVolume {
         )
 
         guard status == noErr, deviceID != AudioDeviceID(kAudioObjectUnknown) else {
+            cachedDefaultOutputDeviceID = nil
+            cachedDefaultOutputDeviceReadTime = now
             return nil
         }
 
+        cachedDefaultOutputDeviceID = deviceID
+        cachedDefaultOutputDeviceReadTime = now
         return deviceID
     }
 
