@@ -153,11 +153,6 @@ final class SkyLightOverlayController {
         islandWindowController?.window?.orderFrontRegardless()
     }
 
-    private func closeIslandWindow() {
-        islandWindowController?.close()
-        islandWindowController = nil
-    }
-
     private func hideIslandWindowForLock() {
         islandWindowController?.window?.orderOut(nil)
     }

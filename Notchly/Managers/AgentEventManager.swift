@@ -412,9 +412,9 @@ final class AgentEventManager: ObservableObject {
         eventsDirectoryURL.appendingPathComponent("agent-events.jsonl")
     }
 
-    private func debugLog(_ message: String) {
-        #if DEBUG
-        print("[AgentEvent] \(message)")
+    private func debugLog(_ message: @autoclosure () -> String) {
+        #if AGENT_EVENT_DEBUG
+        print("[AgentEvent] \(message())")
         #endif
     }
 }
