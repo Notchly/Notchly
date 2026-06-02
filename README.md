@@ -11,15 +11,17 @@
 <p align="center">
   <a href="https://notchly.xyz"><strong>Website</strong></a>
   ·
-  <a href="https://github.com/Notchly/Notchly/releases/latest"><strong>Download for macOS</strong></a>
+  <a href="https://github.com/Notchly/Notchly/releases/latest"><strong>Download</strong></a>
   ·
-  <a href="https://cdn.notchly.xyz/notchly-preview.mp4"><strong>Video preview</strong></a>
+  <a href="https://cdn.notchly.xyz/notchly-preview.mp4"><strong>Preview</strong></a>
+  ·
+  <a href="https://x.com/i/status/2061860955928100956"><strong>Codex Alerts</strong></a>
   ·
   <a href="docs/ARCHITECTURE.md"><strong>Architecture</strong></a>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/macOS-15.6%2B-black?style=flat-square&logo=apple" alt="macOS 15.6+">
+  <img src="https://img.shields.io/badge/macOS-14.6%2B-black?style=flat-square&logo=apple" alt="macOS 14.6+">
   <img src="https://img.shields.io/badge/SwiftUI-Native-orange?style=flat-square&logo=swift" alt="Native SwiftUI app">
   <img src="https://img.shields.io/badge/Privacy-Friendly-green?style=flat-square" alt="Privacy friendly">
   <a href="https://github.com/Notchly/Notchly/releases/latest">
@@ -37,98 +39,99 @@
 </p>
 
 <p align="center">
-  If Notchly makes your Mac feel a little better, please
-  <a href="https://github.com/Notchly/Notchly/stargazers"><strong>⭐ star the project</strong></a>.
-  It helps more Mac users discover it.
+  If Notchly makes your Mac feel better, please
+  <a href="https://github.com/Notchly/Notchly/stargazers"><strong>star the project</strong></a>.
 </p>
 
 ---
 
 ## Notchly
 
-**Notchly** is a lightweight native macOS app that gives the MacBook notch something useful to do.
+**Notchly** is a lightweight native macOS app that turns the MacBook notch into a compact control surface.
 
-It adds compact HUDs, live music controls, lock screen support, focus animations, swipe gestures, smooth transitions, and small native interactions around the notch, making it feel like an intentional part of macOS instead of unused screen space.
-
-Notchly is built to stay simple, fast, and focused.
+It adds music controls, battery status, lock screen support, focus animations, gestures, smooth transitions, and Codex AI alerts around the notch.
 
 ## Preview
 
 <p align="center">
 
-https://github.com/user-attachments/assets/01e1a07d-79c5-444c-abfd-1ae2ec9b4e48
+<img width="1920" height="1080" alt="s-preview" src="https://github.com/user-attachments/assets/4a3fb21b-0261-441e-bdf0-afe69f9cb342" />
 
 </p>
 
-## Quickstart
+## Highlights
 
-### Download
+- Music controls for Spotify, Apple Music, and supported media sources.
+- Battery and charging indicators.
+- Lock screen music controls.
+- Focus mode animations.
+- Swipe gestures for quick interactions.
+- Multi-display behavior for primary screen setups.
+- Codex AI alerts for approval and task completion events.
+- Local-first design with no personal data collection.
 
-1. Open the [latest release](https://github.com/Notchly/Notchly/releases/latest).
-2. Download the `Notchly-*.dmg` asset.
-3. Open the DMG and move Notchly to Applications.
-4. Launch Notchly from Applications.
+## Codex AI Alerts
 
-Depending on your macOS security settings, you may need to confirm the first launch in System Settings. macOS may also ask for Automation permission the first time you use Spotify or Apple Music controls that rely on Apple Events.
+Notchly can show alerts for Codex sessions.
 
-### Settings
+Enable it in **Settings → Codex**:
 
-Open Notchly from the menu bar to configure:
+1. Turn on **Codex Alerts**.
+2. Enable **Need Approval Sound** if you want approval alerts.
+3. Enable **Task Completed Sound** if you want completion alerts.
+4. Restart Codex so the local Stop hook can send completion events to Notchly.
 
-- General behavior, launch at login, lock sound, and focus animations
-- Battery visibility and low-battery threshold
-- Music preview timing and AppleScript controls for Spotify or Apple Music
-- Primary-display behavior for multi-monitor setups
+Preview: https://x.com/i/status/2061860955928100956
+
+## Requirements
+
+- macOS 14.6 or newer.
+
+## Installation
+
+1. Download the latest DMG from [Releases](https://github.com/Notchly/Notchly/releases/latest).
+2. Open the DMG.
+3. Move Notchly to Applications.
+4. Launch Notchly.
+
+macOS may ask for Automation permission when using Spotify or Apple Music controls.
+
+## Settings
+
+- General behavior, launch at login, lock sound, and focus animations.
+- Battery visibility and low-battery threshold.
+- Music preview timing and AppleScript controls.
+- Primary-display behavior for multi-monitor setups.
+- Codex alerts, approval sound, task completed sound, and alert duration.
 
 ## Build From Source
-
-### Requirements
-
-- macOS 15.6 or newer
-- Xcode 26 or newer
-- A Mac display setup where notch or safe-area behavior is available
-
-### Xcode
-
-1. Clone the repository.
-2. Open `Notchly.xcodeproj`.
-3. Let Xcode resolve Swift Package Manager dependencies.
-4. Select the `Notchly` scheme.
-5. Build and run.
-
-### Command Line
 
 ```sh
 git clone git@github.com:Notchly/Notchly.git
 cd Notchly
-xcodebuild -project Notchly.xcodeproj -scheme Notchly -configuration Debug build
+open Notchly.xcodeproj
 ```
 
-For a build with a custom DerivedData directory:
+Or build from the command line:
 
 ```sh
-xcodebuild \
-  -project Notchly.xcodeproj \
-  -scheme Notchly \
-  -configuration Debug \
-  -derivedDataPath /tmp/notchly-derived \
-  build
+xcodebuild -project Notchly.xcodeproj -scheme Notchly -configuration Debug build
 ```
 
 ## Dependencies
 
-Notchly uses Swift Package Manager through the Xcode project:
-
-- [Sparkle](https://sparkle-project.org/) for app update checks
-- [SkyLightWindow](https://github.com/Lakr233/SkyLightWindow) for overlay window integration
-- [mediaremote-adapter](https://github.com/ejbills/mediaremote-adapter) for Now Playing / MediaRemote access
+- [Sparkle](https://sparkle-project.org/) for app updates.
+- [SkyLightWindow](https://github.com/Lakr233/SkyLightWindow) for overlay windows.
+- [mediaremote-adapter](https://github.com/ejbills/mediaremote-adapter) for Now Playing / MediaRemote access.
 
 ## Contributing
 
-Pull requests are welcome. Please keep platform integrations isolated, avoid committing local signing changes, and make sure the app builds before opening a PR.
+Pull requests are welcome.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for local setup and the PR checklist.
+Please keep platform integrations isolated, avoid committing local signing changes, and make sure the app builds before opening a PR.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-Notchly is released under the MIT License. See [LICENSE](LICENSE) for details.
+Notchly is released under the MIT License. See [LICENSE](LICENSE).
