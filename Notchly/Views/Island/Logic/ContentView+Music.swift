@@ -11,18 +11,27 @@ extension ContentView {
     var musicContainer: some View {
         let isWaveformActive = animationsEnabled && musicManager.isPlaying
         let clippedWidth = max(0, layout.islandSize.width + layout.cornerRadius * 2)
+        let agentEvent = displayedAgentEvent ?? agentEventManager.currentEvent
+        let hasPendingAgentEvent =
+            agentEvent != nil &&
+            (showsAgentOverMusic || isAgentMusicTransitionActive)
+        let showsAgentActivity =
+            hasPendingAgentEvent &&
+            isAgentMusicTransitionActive &&
+            status == .agentPreview
         
         return IslandContainerView(
             size: layout.islandSize,
             cornerRadius: layout.cornerRadius,
             spacing: layout.spacing,
-            shadowOpacity: status == .opened || status == .popping ? 0.2 : 0
+            shadowOpacity: status == .opened || status == .popping ? 0.2 : 0,
+            showsTopCornerCutouts: !hasPendingAgentEvent
         ) {
-            if status == .closed ||
+            if !hidesMusicContentDuringAgentReturn && !hasPendingAgentEvent && (status == .closed ||
                 status == .popping ||
-                (status == .focusCollapse && focusCollapseShowsMusic) ||
-                (status == .brightnessCollapse && brightnessCollapseShowsMusic) ||
-                (status == .volumeCollapse && volumeCollapseShowsMusic) {
+                (status == .focusCollapse && focusCollapseShowsMusic && !hidesFocusStatusContentDuringReturn) ||
+                (status == .brightnessCollapse && brightnessCollapseShowsMusic && !hidesBrightnessStatusContentDuringReturn) ||
+                (status == .volumeCollapse && volumeCollapseShowsMusic && !hidesVolumeStatusContentDuringReturn)) {
                 CompactMusicView(
                     artwork: musicManager.artworkImage,
                     waveformColor: musicManager.waveformColor,
@@ -36,7 +45,7 @@ extension ContentView {
                 .zIndex(1)
             }
 
-            if status == .musicPreview {
+            if !hidesMusicContentDuringAgentReturn && !hasPendingAgentEvent && status == .musicPreview {
                 PreviewMusicView(
                     artwork: musicManager.artworkImage,
                     combinedPreviewText: combinedPreviewText,
@@ -46,15 +55,31 @@ extension ContentView {
                     skipIndicator: skipIndicator
                 )
                 .offset(y: 10)
-                .transition(
-                    .scale(scale: 0.94)
-                        .combined(with: .opacity)
-                        .combined(with: .offset(y: -10))
-                )
+                .opacity(showsAgentActivity && showsAgentMusicContent ? 0 : 1)
+                .scaleEffect(showsAgentActivity && showsAgentMusicContent ? 0.985 : 1)
+                .animation(.smooth(duration: 0.3, extraBounce: 0), value: showsAgentMusicContent)
+                .transition(.opacity.combined(with: .offset(y: 6)))
                 .zIndex(2)
             }
 
-            if status == .focusPreview || (status == .focusCollapse && !focusCollapseShowsMusic) {
+            if showsAgentActivity {
+                AgentActivityView(
+                    event: agentEvent,
+                    size: layout.musicPreviewSize
+                )
+                .offset(y: 10)
+                .opacity(showsAgentMusicContent ? 1 : 0)
+                .scaleEffect(showsAgentMusicContent ? 1 : 0.985)
+                .animation(.smooth(duration: 0.3, extraBounce: 0), value: showsAgentMusicContent)
+                .transition(
+                    .scale(scale: 0.985)
+                        .combined(with: .opacity)
+                        .combined(with: .offset(y: -4))
+                )
+                .zIndex(5)
+            }
+
+            if status == .focusPreview || (status == .focusCollapse && !focusCollapseShowsMusic && !hidesFocusStatusContentDuringReturn) {
                 FocusMusicStatusView(
                     isActive: focusStatusIsActive,
                     hidesLabel: settingsManager.hideFocusLabel,
@@ -64,7 +89,7 @@ extension ContentView {
                 .zIndex(4)
             }
 
-            if status == .brightnessPreview || (status == .brightnessCollapse && !brightnessCollapseShowsMusic) {
+            if status == .brightnessPreview || (status == .brightnessCollapse && !brightnessCollapseShowsMusic && !hidesBrightnessStatusContentDuringReturn) {
                 BrightnessStatusView(
                     brightness: brightnessManager.brightnessLevel,
                     lineWidth: CGFloat(settingsManager.brightnessLineWidth),
@@ -76,7 +101,7 @@ extension ContentView {
                 .zIndex(4)
             }
 
-            if status == .volumePreview || (status == .volumeCollapse && !volumeCollapseShowsMusic) {
+            if status == .volumePreview || (status == .volumeCollapse && !volumeCollapseShowsMusic && !hidesVolumeStatusContentDuringReturn) {
                 VolumeStatusView(
                     volume: musicManager.outputVolume,
                     isMuted: musicManager.isOutputMuted,
@@ -89,7 +114,7 @@ extension ContentView {
                 .zIndex(4)
             }
 
-            if status == .opened {
+            if !hidesMusicContentDuringAgentReturn && status == .opened {
                 ExpandedMusicView(
                     artwork: musicManager.artworkImage,
                     artworkTransitionKey: artworkTransitionKey,
@@ -157,12 +182,24 @@ extension ContentView {
                 .zIndex(3)
             }
         }
+        .animation(
+            isAgentMusicTransitionActive ? .smooth(duration: 0.42, extraBounce: 0) : animation,
+            value: layout.islandSize.width
+        )
+        .animation(
+            isAgentMusicTransitionActive ? .smooth(duration: 0.42, extraBounce: 0) : animation,
+            value: layout.islandSize.height
+        )
+        .animation(
+            isAgentMusicTransitionActive ? .smooth(duration: 0.42, extraBounce: 0) : animation,
+            value: layout.cornerRadius
+        )
         .frame(width: clippedWidth, height: layout.islandSize.height)
         .clipped()
         .contentShape(RoundedRectangle(cornerRadius: layout.cornerRadius))
         .overlay(
             ZStack {
-                if status == .closed || status == .musicPreview {
+                if !hasPendingAgentEvent && (status == .closed || status == .musicPreview) {
                     IslandClickCatcher {
                         guard settingsManager.showMusic else { return }
 
@@ -176,7 +213,13 @@ extension ContentView {
                     }
                 }
 
-                if status != .opened {
+                if hasPendingAgentEvent {
+                    IslandClickCatcher {
+                        openAgentSourceApp(agentEvent)
+                    }
+                }
+
+                if status != .opened && !hasPendingAgentEvent {
                     ScrollSwipeCatcher { deltaX, deltaY in
                         handleMusicScroll(deltaX: deltaX, deltaY: deltaY)
                     }
@@ -197,6 +240,7 @@ extension ContentView {
         let horizontalTriggerThreshold: CGFloat = 14
         let verticalTriggerThreshold: CGFloat = 8
         let resetThreshold: CGFloat = 2
+        let trackSwipeCooldown: TimeInterval = 0.75
 
         if abs(deltaX) <= resetThreshold && abs(deltaY) <= resetThreshold {
             musicScrollGestureState = 0
@@ -205,7 +249,11 @@ extension ContentView {
 
         if abs(deltaX) > abs(deltaY) {
             if deltaX < -horizontalTriggerThreshold, musicScrollGestureState == 0 {
+                let now = Date.timeIntervalSinceReferenceDate
+                guard now - lastMusicTrackSwipeTime >= trackSwipeCooldown else { return }
+
                 musicScrollGestureState = 1
+                lastMusicTrackSwipeTime = now
                 autoExpandMusicTask?.cancel()
                 performHapticFeedback()
                 showSkipIndicator("forward.fill")
@@ -216,7 +264,11 @@ extension ContentView {
             }
 
             if deltaX > horizontalTriggerThreshold, musicScrollGestureState == 0 {
+                let now = Date.timeIntervalSinceReferenceDate
+                guard now - lastMusicTrackSwipeTime >= trackSwipeCooldown else { return }
+
                 musicScrollGestureState = -1
+                lastMusicTrackSwipeTime = now
                 autoExpandMusicTask?.cancel()
                 performHapticFeedback()
                 showSkipIndicator("backward.fill")
@@ -257,18 +309,54 @@ extension ContentView {
     }
 
     func handleMusicAutoExpand(isPlaying: Bool) {
-        guard dynamicManager.currentModule == .music else { return }
+        guard !isAgentAlertBlockingOtherEvents else { return }
+        guard dynamicManager.currentModule == .music || musicManager.hasNowPlayingContent else { return }
         guard isPlaying else { return }
         guard settingsManager.showMusic else { return }
+        guard status == .closed || status == .musicPreview || status == .opened else { return }
 
         let key = currentMusicAutoOpenKey
         guard !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+
+        if stagedMusicAutoOpenKey == key && status == .closed {
+            return
+        }
+
+        let shouldStageClosedMusicPreview =
+            status == .closed &&
+            (musicStartUsesIdleWidth || lastMusicAutoOpenKey.isEmpty || dynamicManager.currentModule != .music)
+
+        if shouldStageClosedMusicPreview {
+            stagedMusicAutoOpenKey = key
+            autoExpandMusicTask?.cancel()
+
+            autoExpandMusicTask = Task {
+                try? await Task.sleep(for: .milliseconds(520))
+                guard !Task.isCancelled else { return }
+
+                await MainActor.run {
+                    guard musicManager.isPlaying else { return }
+                    guard musicManager.hasNowPlayingContent else { return }
+                    guard status == .closed else { return }
+                    guard stagedMusicAutoOpenKey == key else { return }
+
+                    stagedMusicAutoOpenKey = ""
+                    openMusicPreview(for: key)
+                }
+            }
+            return
+        }
 
         if lastMusicAutoOpenKey == key && (status == .musicPreview || status == .opened) {
             return
         }
 
+        openMusicPreview(for: key)
+    }
+
+    func openMusicPreview(for key: String) {
         lastMusicAutoOpenKey = key
+        stagedMusicAutoOpenKey = ""
         autoExpandMusicTask?.cancel()
 
         if status == .opened {
@@ -290,7 +378,8 @@ extension ContentView {
             guard !Task.isCancelled else { return }
 
             await MainActor.run {
-                guard dynamicManager.currentModule == .music else { return }
+                guard !isAgentAlertBlockingOtherEvents else { return }
+                guard dynamicManager.currentModule == .music || musicManager.hasNowPlayingContent else { return }
                 guard status == .musicPreview else { return }
                 guard previewAutoCloseKey == scheduledKey else { return }
 
@@ -298,6 +387,36 @@ extension ContentView {
                     status = .closed
                 }
             }
+        }
+    }
+
+    func handleMusicPlaybackChange(isPlaying: Bool) {
+        guard settingsManager.showMusic else { return }
+
+        if isPlaying {
+            defer { lastMusicPauseDate = nil }
+
+            guard let lastMusicPauseDate else {
+                handleMusicAutoExpand(isPlaying: true)
+                return
+            }
+
+            guard Date().timeIntervalSince(lastMusicPauseDate) >= 15 else { return }
+
+            handleMusicAutoExpand(isPlaying: true)
+            return
+        }
+
+        lastMusicPauseDate = Date()
+
+        guard status == .musicPreview else { return }
+
+        autoExpandMusicTask?.cancel()
+        autoExpandMusicTask = nil
+        previewAutoCloseKey = ""
+
+        withAnimation(animation) {
+            status = .closed
         }
     }
 

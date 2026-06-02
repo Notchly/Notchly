@@ -12,6 +12,7 @@ struct IslandContainerView<Content: View>: View {
     let cornerRadius: CGFloat
     let spacing: CGFloat
     let shadowOpacity: Double
+    let showsTopCornerCutouts: Bool
     let content: Content
 
     init(
@@ -19,12 +20,14 @@ struct IslandContainerView<Content: View>: View {
         cornerRadius: CGFloat,
         spacing: CGFloat,
         shadowOpacity: Double = 0,
+        showsTopCornerCutouts: Bool = true,
         @ViewBuilder content: () -> Content
     ) {
         self.size = size
         self.cornerRadius = cornerRadius
         self.spacing = spacing
         self.shadowOpacity = shadowOpacity
+        self.showsTopCornerCutouts = showsTopCornerCutouts
         self.content = content()
     }
 
@@ -34,7 +37,8 @@ struct IslandContainerView<Content: View>: View {
                 size: size,
                 cornerRadius: cornerRadius,
                 spacing: spacing,
-                shadowOpacity: shadowOpacity
+                shadowOpacity: shadowOpacity,
+                showsTopCornerCutouts: showsTopCornerCutouts
             )
 
             content

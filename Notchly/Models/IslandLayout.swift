@@ -14,15 +14,33 @@ struct IslandLayout {
     let isMusicVolumeControlExpanded: Bool
     let closedHeight: CGFloat
     let islandWidth: CGFloat
+    let allowsCompactBaseWidth: Bool
+    let idleWidthOverride: CGFloat?
 
     let spacing: CGFloat = 10
 
     var baseWidth: CGFloat {
-        min(max(islandWidth, 280), 360)
+        min(max(islandWidth, allowsCompactBaseWidth ? 160 : 280), 360)
     }
 
     var closedSize: CGSize {
         CGSize(width: baseWidth, height: closedHeight)
+    }
+
+    var idleWidth: CGFloat {
+        if let idleWidthOverride {
+            return min(max(idleWidthOverride, 120), baseWidth)
+        }
+
+        return min(max(baseWidth * 0.58, 160), 210)
+    }
+
+    var idleSize: CGSize {
+        CGSize(width: idleWidth, height: closedHeight)
+    }
+
+    var idleHoverSize: CGSize {
+        CGSize(width: idleWidth + 8, height: closedHeight)
     }
 
     var openedSize: CGSize {
@@ -61,6 +79,14 @@ struct IslandLayout {
         CGSize(width: closedSize.width * 0.5, height: closedHeight)
     }
 
+    var agentPreviewSize: CGSize {
+        musicPreviewSize
+    }
+
+    var agentCollapsedSize: CGSize {
+        CGSize(width: closedSize.width * 0.5, height: closedHeight)
+    }
+
     var chargingSize: CGSize {
         CGSize(width: max(280, baseWidth - 38), height: closedHeight)
     }
@@ -87,6 +113,10 @@ struct IslandLayout {
             return volumeCollapsedSize
         case .volumePreview:
             return volumePreviewSize
+        case .agentCollapse:
+            return agentCollapsedSize
+        case .agentPreview:
+            return agentPreviewSize
         }
     }
 
@@ -112,6 +142,10 @@ struct IslandLayout {
             return 8
         case .volumePreview:
             return 8
+        case .agentCollapse:
+            return 8
+        case .agentPreview:
+            return 24
         }
     }
 }

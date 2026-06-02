@@ -9,6 +9,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @ObservedObject var settingsManager: SettingsManager
+    @ObservedObject var codexHookIntegrationManager: CodexHookIntegrationManager
     @State private var selectedSection: SettingsSection = .about
     @State private var searchText = ""
 
@@ -40,7 +41,7 @@ struct SettingsView: View {
 
                     sidebarGroup(
                         title: "Live Activities",
-                        sections: [.music]
+                        sections: [.music, .codex]
                     )
 
                     sidebarGroup(
@@ -234,6 +235,12 @@ struct SettingsView: View {
 
         case .music:
             MusicSettingsView(settingsManager: settingsManager)
+
+        case .codex:
+            CodexSettingsView(
+                settingsManager: settingsManager,
+                codexHookIntegrationManager: codexHookIntegrationManager
+            )
             
         case .about:
               AboutSettingsView()
@@ -285,6 +292,8 @@ struct SettingsView: View {
                 settingsManager.resetBatterySettings()
             case .music:
                 settingsManager.resetMusicSettings()
+            case .codex:
+                settingsManager.resetCodexSettings()
             }
         }
     }

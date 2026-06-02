@@ -12,17 +12,19 @@ import Sparkle
 final class AppMenuController: NSObject {
     private var statusItem: NSStatusItem?
     private var hasStartedUpdater = false
-    private var scheduledUpdaterStartTask: Task<Void, Never>?
 
     private let settingsWindow: SettingsWindow
     private let updaterController: SPUStandardUpdaterController
+    private let agentEventManager: AgentEventManager
 
     init(
         settingsWindow: SettingsWindow,
-        updaterController: SPUStandardUpdaterController
+        updaterController: SPUStandardUpdaterController,
+        agentEventManager: AgentEventManager
     ) {
         self.settingsWindow = settingsWindow
         self.updaterController = updaterController
+        self.agentEventManager = agentEventManager
         super.init()
     }
 
@@ -37,11 +39,6 @@ final class AppMenuController: NSObject {
         }
 
         item.menu = makeMenu()
-        scheduleUpdaterStart()
-    }
-
-    deinit {
-        scheduledUpdaterStartTask?.cancel()
     }
 
     private func makeMenu() -> NSMenu {
@@ -78,11 +75,34 @@ final class AppMenuController: NSObject {
         let menu = NSMenu()
         menu.addItem(versionItem)
         menu.addItem(settingsItem)
+
+#if DEBUG
+        let testCodexItem = NSMenuItem(
+            title: "Test Codex Alert",
+            action: #selector(testCodexAlert),
+            keyEquivalent: ""
+        )
+        testCodexItem.target = self
+        menu.addItem(testCodexItem)
+#endif
+
         menu.addItem(.separator())
         menu.addItem(updatesItem)
         menu.addItem(quitItem)
         return menu
     }
+
+#if DEBUG
+    @objc private func testCodexAlert() {
+        agentEventManager.publish(
+            source: "codex",
+            kind: .accessRequest,
+            title: "Need approval",
+            message: "Test alert from menu",
+            ttl: 3.0
+        )
+    }
+#endif
 
     @objc private func openSettings() {
         settingsWindow.show()
@@ -99,17 +119,6 @@ final class AppMenuController: NSObject {
 
     @objc private func quitApp() {
         NSApp.terminate(nil)
-    }
-
-    private func scheduleUpdaterStart() {
-        guard scheduledUpdaterStartTask == nil else { return }
-
-        scheduledUpdaterStartTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: 5_000_000_000)
-            guard !Task.isCancelled else { return }
-            self?.startUpdaterIfNeeded()
-            self?.scheduledUpdaterStartTask = nil
-        }
     }
 
     private func startUpdaterIfNeeded() {

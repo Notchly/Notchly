@@ -11,28 +11,51 @@ import AppKit
 extension ContentView {
     var layout: IslandLayout {
         IslandLayout(
-            status: status,
-            isMusicModule: dynamicManager.currentModule == .music,
+            status: layoutStatus,
+            isMusicModule: usesMusicLayout,
             showChargingPop: showChargingPop,
             isMusicVolumeControlExpanded: showMusicVolumeControl,
             closedHeight: closedHeight,
-            islandWidth: CGFloat(settingsManager.islandWidth)
+            islandWidth: effectiveIslandWidth,
+            allowsCompactBaseWidth: musicStartUsesIdleWidth,
+            idleWidthOverride: configuredIdleIslandWidth
         )
     }
 
     var activeModuleView: some View {
         Group {
-            if status == .focusCollapse ||
+            if isAgentMusicTransitionActive {
+                musicContainer
+            } else if isStandaloneAgentPresentationActive {
+                agentContainer
+            } else if dynamicManager.currentModule == .agent,
+                      agentEventManager.currentEvent == nil,
+                      settingsManager.showMusic,
+                      musicManager.hasNowPlayingContent {
+                musicContainer
+            } else if dynamicManager.currentModule == .agent {
+                agentContainer
+            } else if status == .focusCollapse ||
                 status == .focusPreview ||
                 status == .brightnessCollapse ||
                 status == .brightnessPreview ||
                 status == .volumeCollapse ||
                 status == .volumePreview {
                 musicContainer
+            } else if settingsManager.showMusic &&
+                musicManager.hasNowPlayingContent &&
+                (musicStartUsesIdleWidth || !stagedMusicAutoOpenKey.isEmpty) {
+                musicContainer
             } else {
                 switch dynamicManager.currentModule {
+                case .agent:
+                    agentContainer
                 case .battery:
-                    islandContainer
+                    if settingsManager.showBattery {
+                        islandContainer
+                    } else {
+                        emptyBar
+                    }
                 case .music:
                     musicContainer
                 case .none:
@@ -42,11 +65,101 @@ extension ContentView {
         }
     }
 
+    var layoutStatus: IslandStatus {
+        return status
+    }
+
+    var usesMusicLayout: Bool {
+        if dynamicManager.currentModule == .music || isAgentMusicTransitionActive {
+            return true
+        }
+
+        guard settingsManager.showMusic,
+              musicManager.hasNowPlayingContent else { return false }
+
+        switch status {
+        case .opened, .musicPreview, .agentCollapse, .agentPreview:
+            return true
+        case .closed, .popping, .focusCollapse, .focusPreview, .brightnessCollapse, .brightnessPreview, .volumeCollapse, .volumePreview:
+            return false
+        }
+    }
+
+    var canShowAgentOverMusic: Bool {
+        guard settingsManager.showMusic else { return false }
+        guard musicManager.isPlaying else { return false }
+        guard musicManager.hasNowPlayingContent else { return false }
+
+        switch status {
+        case .closed, .opened, .musicPreview:
+            return true
+        case .popping, .focusCollapse, .focusPreview, .brightnessCollapse, .brightnessPreview, .volumeCollapse, .volumePreview, .agentCollapse, .agentPreview:
+            return false
+        }
+    }
+
+    var showsAgentOverMusic: Bool {
+        agentEventManager.currentEvent != nil && canShowAgentOverMusic
+    }
+
+    var activeAgentEvent: AgentEvent? {
+        displayedAgentEvent ?? agentEventManager.currentEvent
+    }
+
+    var isStandaloneAgentPresentationActive: Bool {
+        guard !isAgentMusicTransitionActive else { return false }
+        guard activeAgentEvent != nil else { return false }
+        return status == .agentPreview || status == .agentCollapse
+    }
+
+    var isAgentAlertBlockingOtherEvents: Bool {
+        activeAgentEvent != nil || isAgentMusicTransitionActive
+    }
+
     var closedHeight: CGFloat {
         resolvedClosedHeight
     }
 
+    var configuredBaseIslandWidth: CGFloat {
+        min(max(CGFloat(settingsManager.islandWidth), 280), 360)
+    }
+
+    var configuredIdleIslandWidth: CGFloat {
+        IslandWidthResolver.idleWidth(
+            for: currentScreen,
+            configuredIslandWidth: configuredBaseIslandWidth
+        )
+    }
+
+    var effectiveIslandWidth: CGFloat {
+        guard musicStartUsesIdleWidth,
+              status == .closed else {
+            return CGFloat(settingsManager.islandWidth)
+        }
+
+        return configuredIdleIslandWidth + (isHovered ? 8 : 0)
+    }
+
+    var usesIdleNotchSize: Bool {
+        guard status == .closed else { return false }
+        guard agentEventManager.currentEvent == nil else { return false }
+        guard !showChargingPop else { return false }
+        guard !musicEndKeepsFullWidth else { return false }
+        guard !musicStartUsesIdleWidth else { return true }
+        guard !musicManager.hasNowPlayingContent else { return false }
+
+        return dynamicManager.currentModule == .none || dynamicManager.currentModule == .battery
+    }
+
+    var idleNotchSize: CGSize {
+        usesIdleNotchSize && isHovered ? layout.idleHoverSize : layout.idleSize
+    }
+
     var hoverScale: CGFloat {
+        if usesIdleNotchSize {
+            return 1.0
+        }
+
         guard isHovered else { return 1.0 }
 
         switch status {
@@ -69,6 +182,10 @@ extension ContentView {
         case .volumeCollapse:
             return 1.0
         case .volumePreview:
+            return 1.01
+        case .agentCollapse:
+            return 1.0
+        case .agentPreview:
             return 1.01
         }
     }
@@ -151,6 +268,10 @@ extension ContentView {
 
     var animation: Animation {
         .interactiveSpring(duration: 0.5, extraBounce: 0.01, blendDuration: 0.125)
+    }
+
+    var agentMusicHeightAnimation: Animation {
+        .smooth(duration: 0.68, extraBounce: 0)
     }
     
     func formatPlaybackTime(_ totalSeconds: TimeInterval) -> String {

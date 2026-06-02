@@ -10,16 +10,21 @@ import SwiftUI
 extension ContentView {
     var emptyBar: some View {
         EmptyIslandView(
-            size: layout.closedSize,
+            size: usesIdleNotchSize ? idleNotchSize : layout.closedSize,
             cornerRadius: layout.cornerRadius,
             spacing: layout.spacing,
             isHovered: isHovered
         )
+        .animation(.smooth(duration: 0.22, extraBounce: 0), value: isHovered)
+        .animation(animation, value: usesIdleNotchSize)
     }
 
     var islandContainer: some View {
-        IslandContainerView(
-            size: layout.islandSize,
+        let containerSize = usesIdleNotchSize ? idleNotchSize : layout.islandSize
+        let compactContentSize = usesIdleNotchSize ? idleNotchSize : layout.closedSize
+
+        return IslandContainerView(
+            size: containerSize,
             cornerRadius: layout.cornerRadius,
             spacing: layout.spacing,
             shadowOpacity: status == .opened || status == .popping ? 0.2 : 0
@@ -30,7 +35,7 @@ extension ContentView {
                     symbolName: batterySymbolName,
                     iconColor: closedIconColor,
                     textColor: closedTextColor,
-                    size: layout.closedSize,
+                    size: compactContentSize,
                     hoverOffsetY: hoverOffsetY
                 )
                 .allowsHitTesting(false)
@@ -72,6 +77,8 @@ extension ContentView {
                 .zIndex(3)
             }
         }
+        .animation(.smooth(duration: 0.22, extraBounce: 0), value: isHovered)
+        .animation(animation, value: usesIdleNotchSize)
         .onTapGesture {
             guard settingsManager.showBattery else { return }
 
@@ -84,6 +91,8 @@ extension ContentView {
     }
 
     func handleBatteryVisibilityChange(_ isEnabled: Bool) {
+        dynamicManager.updateCurrentModule()
+
         guard !isEnabled else { return }
 
         showChargingPop = false
@@ -97,6 +106,10 @@ extension ContentView {
     }
 
     func handleChargingChange(_ newValue: Bool) {
+        guard !isAgentAlertBlockingOtherEvents else {
+            showChargingPop = false
+            return
+        }
         guard settingsManager.showBattery else {
             showChargingPop = false
             return
@@ -113,6 +126,7 @@ extension ContentView {
             }
 
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
+                guard !isAgentAlertBlockingOtherEvents else { return }
                 guard settingsManager.showBattery else { return }
                 guard status != .opened else { return }
 
@@ -121,6 +135,7 @@ extension ContentView {
                 }
 
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+                    guard !isAgentAlertBlockingOtherEvents else { return }
                     guard settingsManager.showBattery else { return }
                     withAnimation(animation) {
                         status = .closed
@@ -133,6 +148,7 @@ extension ContentView {
             }
 
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                guard !isAgentAlertBlockingOtherEvents else { return }
                 guard settingsManager.showBattery else { return }
                 withAnimation(animation) {
                     status = .closed

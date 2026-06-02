@@ -8,9 +8,9 @@
 import SwiftUI
 
 struct LockScreenIslandView: View {
-    private let islandWidth: CGFloat = 318
     private let cornerRadius: CGFloat = 8
 
+    let islandWidth: CGFloat
     let height: CGFloat
     let isUnlocking: Bool
     let showOpenedLock: Bool

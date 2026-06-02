@@ -18,4 +18,6 @@ enum IslandStatus {
     case brightnessPreview
     case volumeCollapse
     case volumePreview
+    case agentCollapse
+    case agentPreview
 }

@@ -15,6 +15,7 @@ struct ContentView: View {
     @ObservedObject var musicManager: MusicManager
     @ObservedObject var focusManager: FocusManager
     @ObservedObject var brightnessManager: BrightnessManager
+    @ObservedObject var agentEventManager: AgentEventManager
     let animationsEnabled: Bool
 
     @State var status: IslandStatus = .closed
@@ -24,27 +25,46 @@ struct ContentView: View {
     @State var autoExpandMusicTask: Task<Void, Never>?
     @State var focusStatusTask: Task<Void, Never>?
     @State var lastMusicAutoOpenKey: String = ""
+    @State var stagedMusicAutoOpenKey: String = ""
+    @State var lastMusicPauseDate: Date?
     @State var previewAutoCloseKey: String = ""
     @State var focusReturnStatus: IslandStatus = .closed
     @State var focusCollapseShowsMusic = true
     @State var focusStatusIsActive = false
+    @State var hidesFocusStatusContentDuringReturn = false
     @State var pendingFocusEventIsActive = false
     @State var pendingFocusEventTimestamp: TimeInterval?
     @State var brightnessStatusTask: Task<Void, Never>?
     @State var brightnessReturnStatus: IslandStatus = .closed
     @State var brightnessCollapseShowsMusic = true
+    @State var hidesBrightnessStatusContentDuringReturn = false
     @State var pendingBrightnessEventTimestamp: TimeInterval?
     @State var lastBrightnessStatusEventTime: TimeInterval = 0
     @State var volumeStatusTask: Task<Void, Never>?
     @State var volumeReturnStatus: IslandStatus = .closed
     @State var volumeCollapseShowsMusic = true
+    @State var hidesVolumeStatusContentDuringReturn = false
     @State var pendingVolumeEventTimestamp: TimeInterval?
     @State var lastVolumeStatusEventTime: TimeInterval = 0
     @State var musicScrollGestureState: Int = 0
+    @State var lastMusicTrackSwipeTime: TimeInterval = 0
     @State var isPointerInsideIsland = false
     @State var playPauseBounce = false
     @State var skipIndicator: String?
     @State var showMusicVolumeControl = false
+    @State var isAgentMusicTransitionActive = false
+    @State var agentMusicReturnStatus: IslandStatus = .closed
+    @State var displayedAgentEvent: AgentEvent?
+    @State var agentPresentationStartedAt: Date?
+    @State var agentDismissTask: Task<Void, Never>?
+    @State var showsAgentMusicContent = false
+    @State var hidesMusicContentDuringAgentReturn = false
+    @State var agentMusicHideTask: Task<Void, Never>?
+    @State var agentCollapseShowsMusic = true
+    @State var musicStartUsesIdleWidth = false
+    @State var musicStartWidthTask: Task<Void, Never>?
+    @State var musicEndKeepsFullWidth = false
+    @State var musicEndWidthTask: Task<Void, Never>?
     @State var currentScreen: NSScreen?
     @State var resolvedClosedHeight: CGFloat = 36
     
@@ -55,6 +75,10 @@ struct ContentView: View {
     }
 
     var body: some View {
+        islandViewWithScreenReader
+    }
+
+    private var islandRootView: some View {
         ZStack(alignment: .top) {
             Color.clear
                 .allowsHitTesting(false)
@@ -69,6 +93,10 @@ struct ContentView: View {
                 .animation(.easeInOut(duration: 0.22), value: settingsManager.showBattery)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+
+    private var islandViewWithCoreHandlers: some View {
+        islandRootView
         .onAppear {
             handleAppear()
         }
@@ -86,10 +114,14 @@ struct ContentView: View {
             playPendingBrightnessEventIfReady()
             playPendingVolumeEventIfReady()
         }
-        .onChange(of: musicManager.isPlaying) { _, _ in
+        .onChange(of: musicManager.isPlaying) { _, isPlaying in
+            handleMusicPlaybackChange(isPlaying: isPlaying)
             playPendingFocusEventIfReady()
             playPendingBrightnessEventIfReady()
             playPendingVolumeEventIfReady()
+        }
+        .onChange(of: musicManager.hasNowPlayingContent) { _, hasNowPlayingContent in
+            handleNowPlayingContentChange(hasNowPlayingContent)
         }
         .onChange(of: animationsEnabled) { _, _ in
             playPendingFocusEventIfReady()
@@ -101,6 +133,10 @@ struct ContentView: View {
             guard showMusicVolumeControl else { return }
             showMusicVolumeControl = false
         }
+    }
+
+    private var islandViewWithNotificationHandlers: some View {
+        islandViewWithCoreHandlers
         .onChange(of: focusManager.focusEventID) { _, eventID in
             guard eventID > 0 else { return }
             handleFocusEvent(isActive: focusManager.focusEventIsActive)
@@ -112,6 +148,10 @@ struct ContentView: View {
         .onChange(of: musicManager.outputVolumeEventID) { _, eventID in
             guard eventID > 0 else { return }
             handleVolumeEvent()
+        }
+        .onChange(of: agentEventManager.eventID) { _, eventID in
+            guard eventID > 0 else { return }
+            handleAgentEventChange(agentEventManager.currentEvent)
         }
         .onChange(of: settingsManager.showFocusAnimations) { _, isEnabled in
             guard !isEnabled else { return }
@@ -128,11 +168,19 @@ struct ContentView: View {
         .onChange(of: settingsManager.showBattery) { _, isEnabled in
             handleBatteryVisibilityChange(isEnabled)
         }
+    }
+
+    private var islandViewWithAnimations: some View {
+        islandViewWithNotificationHandlers
         .animation(animation, value: status)
         .animation(.easeInOut(duration: 0.18), value: focusStatusIsActive)
         .animation(animation, value: showMusicVolumeControl)
         .animation(.easeInOut(duration: 0.22), value: batteryManager.batteryLevel)
         .preferredColorScheme(.dark)
+    }
+
+    private var islandViewWithScreenReader: some View {
+        islandViewWithAnimations
         .background(
             WindowScreenReader { screen in
                 guard currentScreen !== screen else { return }

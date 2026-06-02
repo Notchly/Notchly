@@ -58,15 +58,324 @@ struct GeneralSettingsView: View {
 
                     SettingsDivider()
 
-                    SettingsToggleRow(
-                        title: "Lock Sound",
-                        subtitle: "Play a subtle sound when the lock screen state changes.",
-                        isOn: $settingsManager.enableLockSound
+                    UnlockSoundSettingsRow(
+                        isEnabled: $settingsManager.enableLockSound
                     )
                 }
             }
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+}
+
+private struct UnlockSoundSettingsRow: View {
+    @Binding var isEnabled: Bool
+
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text("Unlock Sound")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.primary)
+
+                    Button {
+                        UnlockSoundPlayer.shared.play(bypassThrottle: true)
+                    } label: {
+                        Image(systemName: "play.fill")
+                            .font(.system(size: 7, weight: .bold))
+                            .foregroundStyle(.white.opacity(0.78))
+                            .frame(width: 18, height: 18)
+                            .background(.white.opacity(0.12))
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Preview Unlock Sound")
+                }
+
+                Text("Play a subtle sound when your Mac unlocks.")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: 16)
+
+            Toggle("", isOn: $isEnabled)
+                .toggleStyle(.switch)
+                .labelsHidden()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity)
+    }
+}
+
+struct CodexSettingsView: View {
+    @ObservedObject var settingsManager: SettingsManager
+    @ObservedObject var codexHookIntegrationManager: CodexHookIntegrationManager
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            SettingsCard {
+                VStack(spacing: 0) {
+                    CodexHookIntegrationRow(
+                        manager: codexHookIntegrationManager
+                    )
+
+                    SettingsDivider()
+
+                    CodexAlertSoundSettingsRow(
+                        title: "Need Approval Sound",
+                        subtitle: "Play a subtle sound when Codex is waiting for approval.",
+                        kind: .accessRequest,
+                        isEnabled: $settingsManager.enableCodexApprovalAlertSound
+                    )
+
+                    SettingsDivider()
+
+                    CodexAlertSoundSettingsRow(
+                        title: "Task Completed Sound",
+                        subtitle: "Play a subtle sound when Codex finishes a task.",
+                        kind: .completed,
+                        isEnabled: $settingsManager.enableCodexCompletedAlertSound
+                    )
+
+                    SettingsDivider()
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("Job Done Duration")
+                                    .font(.system(size: 13, weight: .medium))
+
+                                Text("How long Codex completion alerts stay visible before returning to music.")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Spacer()
+
+                            Text(String(format: "%.1fs", settingsManager.codexCompletedAlertDuration))
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                        }
+
+                        Slider(
+                            value: $settingsManager.codexCompletedAlertDuration,
+                            in: 1.5...6.0,
+                            step: 0.1
+                        )
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                }
+            }
+        }
+        .onAppear(perform: codexHookIntegrationManager.refreshStatus)
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            codexHookIntegrationManager.refreshStatus()
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+}
+
+private struct CodexAlertSoundSettingsRow: View {
+    let title: String
+    let subtitle: String
+    let kind: AgentEventKind
+    @Binding var isEnabled: Bool
+
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(title)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.primary)
+
+                    previewButton(
+                        kind: kind,
+                        accessibilityLabel: "Preview \(title)"
+                    )
+                }
+
+                Text(subtitle)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: 16)
+
+            Toggle("", isOn: $isEnabled)
+                .toggleStyle(.switch)
+                .labelsHidden()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity)
+    }
+
+    private func previewButton(
+        kind: AgentEventKind,
+        accessibilityLabel: String
+    ) -> some View {
+        Button {
+            CodexAlertSoundPlayer.shared.play(for: kind, bypassThrottle: true)
+        } label: {
+            Image(systemName: "play.fill")
+                .font(.system(size: 7, weight: .bold))
+                .foregroundStyle(.white.opacity(0.78))
+                .frame(width: 18, height: 18)
+                .background(.white.opacity(0.12))
+                .clipShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel)
+    }
+}
+
+private struct CodexHookIntegrationRow: View {
+    @ObservedObject var manager: CodexHookIntegrationManager
+    @State private var isPreviewVisible = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 8) {
+                        Text("Codex Alerts")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.primary)
+
+                        Text(statusText)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(statusColor)
+                            .padding(.horizontal, 8)
+                            .frame(height: 22)
+                            .background(statusColor.opacity(0.16))
+                            .clipShape(Capsule())
+                    }
+
+                    Text(descriptionText)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+
+                Spacer(minLength: 16)
+
+                Button {
+                    isPreviewVisible.toggle()
+                } label: {
+                    Text(isPreviewVisible ? "Hide Details" : "Show Details")
+                        .font(.system(size: 12, weight: .semibold))
+                        .padding(.horizontal, 12)
+                        .frame(height: 32)
+                        .background(Color.white.opacity(0.08))
+                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                }
+                .buttonStyle(SubtleHoverButtonStyle(
+                    pressedScale: 0.96,
+                    hoverScale: 1.025,
+                    hoverBackgroundOpacity: 0.08,
+                    cornerRadius: 16
+                ))
+
+                Button {
+                    manager.install()
+                } label: {
+                    Text(installButtonTitle)
+                        .font(.system(size: 12, weight: .semibold))
+                        .padding(.horizontal, 14)
+                        .frame(height: 32)
+                        .background(manager.isInstalled ? Color.white.opacity(0.08) : Color.accentColor.opacity(0.26))
+                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                }
+                .buttonStyle(SubtleHoverButtonStyle(
+                    pressedScale: 0.96,
+                    hoverScale: 1.025,
+                    hoverBackgroundOpacity: 0.08,
+                    cornerRadius: 16
+                ))
+            }
+
+            if isPreviewVisible {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Notchly only adds this local Codex Stop hook. It writes a completion event file and does not read prompts or responses.")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Text(manager.configPreview)
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.primary.opacity(0.82))
+                        .textSelection(.enabled)
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.black.opacity(0.22))
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                        }
+                }
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity)
+    }
+
+    private var statusText: String {
+        switch manager.installState {
+        case .unknown:
+            return "Checking"
+        case .installing:
+            return "Installing"
+        case .installed:
+            return "Enabled"
+        case .notInstalled:
+            return "Not configured"
+        case .failed:
+            return "Failed"
+        }
+    }
+
+    private var statusColor: Color {
+        switch manager.installState {
+        case .installed:
+            return .green
+        case .failed:
+            return .red
+        case .unknown, .installing:
+            return .secondary
+        case .notInstalled:
+            return .orange
+        }
+    }
+
+    private var descriptionText: String {
+        if case let .failed(message) = manager.installState {
+            return message
+        }
+
+        return "Shows Codex completion alerts using a transparent local Stop hook."
+    }
+
+    private var installButtonTitle: String {
+        switch manager.installState {
+        case .installing:
+            return "Installing..."
+        case .installed:
+            return "Reinstall"
+        default:
+            return "Install Hook"
+        }
     }
 }
 

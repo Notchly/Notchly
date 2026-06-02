@@ -27,6 +27,8 @@ final class AppEnvironment {
     let settingsManager = SettingsManager()
     let focusManager = FocusManager()
     let brightnessManager = BrightnessManager()
+    lazy var agentEventManager = AgentEventManager(settingsManager: settingsManager)
+    let codexHookIntegrationManager = CodexHookIntegrationManager()
     let lockScreenOverlayModel = LockScreenOverlayModel()
 
     let updaterController = SPUStandardUpdaterController(
@@ -40,11 +42,13 @@ final class AppEnvironment {
     lazy var dynamicManager = DynamicManager(
         batteryManager: batteryManager,
         musicManager: musicManager,
-        settingsManager: settingsManager
+        settingsManager: settingsManager,
+        agentEventManager: agentEventManager
     )
 
     lazy var settingsWindow = SettingsWindow(
-        settingsManager: settingsManager
+        settingsManager: settingsManager,
+        codexHookIntegrationManager: codexHookIntegrationManager
     )
 }
 

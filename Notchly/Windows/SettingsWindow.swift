@@ -11,9 +11,14 @@ import AppKit
 final class SettingsWindow: NSObject, NSWindowDelegate {
     private var window: NSWindow?
     private let settingsManager: SettingsManager
+    private let codexHookIntegrationManager: CodexHookIntegrationManager
 
-    init(settingsManager: SettingsManager) {
+    init(
+        settingsManager: SettingsManager,
+        codexHookIntegrationManager: CodexHookIntegrationManager
+    ) {
         self.settingsManager = settingsManager
+        self.codexHookIntegrationManager = codexHookIntegrationManager
         super.init()
     }
 
@@ -28,7 +33,10 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             return
         }
 
-        let rootView = SettingsView(settingsManager: settingsManager)
+        let rootView = SettingsView(
+            settingsManager: settingsManager,
+            codexHookIntegrationManager: codexHookIntegrationManager
+        )
             .ignoresSafeArea(.container, edges: .top)
 
         let window = NSWindow(

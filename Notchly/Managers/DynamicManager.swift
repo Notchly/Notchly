@@ -15,17 +15,20 @@ final class DynamicManager: ObservableObject {
     let batteryManager: BatteryManager
     let musicManager: MusicManager
     let settingsManager: SettingsManager
+    let agentEventManager: AgentEventManager
 
     private var cancellables = Set<AnyCancellable>()
 
     init(
         batteryManager: BatteryManager,
         musicManager: MusicManager,
-        settingsManager: SettingsManager
+        settingsManager: SettingsManager,
+        agentEventManager: AgentEventManager
     ) {
         self.batteryManager = batteryManager
         self.musicManager = musicManager
         self.settingsManager = settingsManager
+        self.agentEventManager = agentEventManager
 
         bind()
         updateCurrentModule()
@@ -54,12 +57,19 @@ final class DynamicManager: ObservableObject {
             .map { _ in () }
             .sink { [weak self] in self?.updateCurrentModule() }
             .store(in: &cancellables)
+
+        agentEventManager.$currentEvent
+            .map { _ in () }
+            .sink { [weak self] in self?.updateCurrentModule() }
+            .store(in: &cancellables)
     }
 
     func updateCurrentModule() {
         let newModule: IslandModule
 
-        if settingsManager.showMusic && musicManager.hasNowPlayingContent {
+        if agentEventManager.currentEvent != nil {
+            newModule = .agent
+        } else if settingsManager.showMusic && musicManager.hasNowPlayingContent {
             newModule = .music
         } else if settingsManager.showMusic && musicManager.isResolvingNowPlaying {
             newModule = .none

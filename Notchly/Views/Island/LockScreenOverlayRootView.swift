@@ -10,20 +10,20 @@ import SwiftUI
 struct LockScreenOverlayRootView: View {
     @ObservedObject var model: LockScreenOverlayModel
     @ObservedObject var settingsManager: SettingsManager
-    @ObservedObject var focusManager: FocusManager
 
-    let batteryManager: BatteryManager
-    let dynamicManager: DynamicManager
     let musicManager: MusicManager
-    let brightnessManager: BrightnessManager
     let screenSize: CGSize
+    let lockScreenPlayerYPosition: CGFloat
+    let initialClosedHeight: CGFloat
 
     @State private var displayedState: LockScreenOverlayState = .locked
     @State private var isUnlocking = false
+    @State private var renderLockScreenPlayer = true
     @State private var showLockScreenPlayer = true
     @State private var showOpenedLock = false
     @State private var openLockTask: DispatchWorkItem?
     @State private var completeTask: DispatchWorkItem?
+    @State private var removePlayerTask: DispatchWorkItem?
     @State private var lastHandledState: LockScreenOverlayState?
     @State private var currentScreen: NSScreen?
     @State private var resolvedClosedHeight: CGFloat = IslandHeightResolver.fallbackHeight
@@ -32,26 +32,24 @@ struct LockScreenOverlayRootView: View {
     init(
         model: LockScreenOverlayModel,
         settingsManager: SettingsManager,
-        focusManager: FocusManager,
-        batteryManager: BatteryManager,
-        dynamicManager: DynamicManager,
         musicManager: MusicManager,
-        brightnessManager: BrightnessManager,
-        screenSize: CGSize
+        screenSize: CGSize,
+        lockScreenPlayerYPosition: CGFloat,
+        initialClosedHeight: CGFloat
     ) {
         self.model = model
         self.settingsManager = settingsManager
-        self.focusManager = focusManager
-        self.batteryManager = batteryManager
-        self.dynamicManager = dynamicManager
         self.musicManager = musicManager
-        self.brightnessManager = brightnessManager
         self.screenSize = screenSize
+        self.lockScreenPlayerYPosition = lockScreenPlayerYPosition
+        self.initialClosedHeight = initialClosedHeight
 
         let initialState = model.state
         _displayedState = State(initialValue: initialState)
+        _renderLockScreenPlayer = State(initialValue: initialState == .locked)
         _showLockScreenPlayer = State(initialValue: initialState == .locked)
         _lastHandledState = State(initialValue: initialState)
+        _resolvedClosedHeight = State(initialValue: initialClosedHeight)
     }
     
     private func updateClosedHeight(for screen: NSScreen?) {
@@ -61,14 +59,7 @@ struct LockScreenOverlayRootView: View {
     }
 
     private let unlockAnimationDuration: TimeInterval = 0.18
-
-    private var lockScreenPlayerYPosition: CGFloat {
-        min(max(screenSize.height * 0.68, 500), screenSize.height - 130)
-    }
-
-    private var isRegularIslandVisible: Bool {
-        displayedState == .music
-    }
+    private let playerHideAnimationDuration: TimeInterval = 0.18
 
     private var isLockScreenPlayerVisible: Bool {
         displayedState == .locked && showLockScreenPlayer
@@ -79,22 +70,7 @@ struct LockScreenOverlayRootView: View {
             Color.clear
                 .allowsHitTesting(false)
 
-            ContentView(
-                batteryManager: batteryManager,
-                settingsManager: settingsManager,
-                dynamicManager: dynamicManager,
-                musicManager: musicManager,
-                focusManager: focusManager,
-                brightnessManager: brightnessManager,
-                animationsEnabled: isRegularIslandVisible
-            )
-            .padding(.top, 0)
-            .opacity(isRegularIslandVisible ? 1 : 0)
-            .allowsHitTesting(isRegularIslandVisible)
-            .accessibilityHidden(!isRegularIslandVisible)
-            .zIndex(isRegularIslandVisible ? 2 : -1)
-
-            if settingsManager.showMusic && musicManager.hasNowPlayingContent {
+            if renderLockScreenPlayer && settingsManager.showMusic && musicManager.hasNowPlayingContent {
                 LockScreenMusicPlayerView(
                     musicManager: musicManager,
                     isVisible: isLockScreenPlayerVisible,
@@ -114,31 +90,33 @@ struct LockScreenOverlayRootView: View {
                 )
                 .position(x: screenSize.width / 2, y: lockScreenPlayerYPosition)
                 .opacity(isLockScreenPlayerVisible ? 1 : 0)
-                .scaleEffect(isLockScreenPlayerVisible ? 1 : 0.96)
-                .offset(y: isLockScreenPlayerVisible ? 0 : 18)
+                .scaleEffect(isLockScreenPlayerVisible ? 1 : 0.99)
+                .offset(y: isLockScreenPlayerVisible ? 0 : 26)
                 .allowsHitTesting(isLockScreenPlayerVisible)
                 .zIndex(1)
             }
 
             LockScreenIslandView(
+                islandWidth: CGFloat(settingsManager.islandWidth),
                 height: resolvedClosedHeight,
                 isUnlocking: isUnlocking,
                 showOpenedLock: showOpenedLock
             )
-            .padding(.top, 0)
+            .position(x: screenSize.width / 2, y: resolvedClosedHeight / 2)
             .opacity(displayedState == .locked ? 1 : 0)
             .allowsHitTesting(false)
             .zIndex(displayedState == .locked ? 3 : 1)
 
         }
         .frame(width: screenSize.width, height: screenSize.height)
+        .ignoresSafeArea(.all)
         .animation(.easeOut(duration: 0.16), value: displayedState)
-        .animation(.easeOut(duration: 0.12), value: showLockScreenPlayer)
+        .animation(.easeInOut(duration: playerHideAnimationDuration), value: showLockScreenPlayer)
         .onAppear {
             displayedState = model.state
+            renderLockScreenPlayer = model.state == .locked
             showLockScreenPlayer = model.state == .locked
             lastHandledState = model.state
-            updateClosedHeight(for: currentScreen)
         }
         .onChange(of: model.state) { _, newValue in
             handleStateChange(newValue)
@@ -190,6 +168,7 @@ struct LockScreenOverlayRootView: View {
         case .locked:
             withAnimation(.easeOut(duration: 0.12)) {
                 isUnlocking = false
+                renderLockScreenPlayer = true
                 showLockScreenPlayer = true
                 showOpenedLock = false
                 displayedState = .locked
@@ -249,16 +228,33 @@ struct LockScreenOverlayRootView: View {
 
         completeTask?.cancel()
         completeTask = nil
+
+        removePlayerTask?.cancel()
+        removePlayerTask = nil
     }
 
     @MainActor
     private func hideLockScreenPlayerForUnlock() {
-        guard showLockScreenPlayer else { return }
+        guard showLockScreenPlayer || renderLockScreenPlayer else { return }
+        removePlayerTask?.cancel()
 
-        withAnimation(.easeOut(duration: 0.12)) {
+        if showLockScreenPlayer {
+            withAnimation(.easeInOut(duration: playerHideAnimationDuration)) {
+                isArtworkExpanded = false
+                showLockScreenPlayer = false
+            }
+        } else {
             isArtworkExpanded = false
-            showLockScreenPlayer = false
         }
+
+        let newRemovePlayerTask = DispatchWorkItem {
+            guard model.state == .music else { return }
+            renderLockScreenPlayer = false
+            removePlayerTask = nil
+        }
+
+        removePlayerTask = newRemovePlayerTask
+        DispatchQueue.main.asyncAfter(deadline: .now() + playerHideAnimationDuration + 0.02, execute: newRemovePlayerTask)
     }
 
 }

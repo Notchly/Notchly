@@ -66,9 +66,12 @@ final class MusicManager: ObservableObject {
     private var pendingShuffleStateUntil: Date?
     private var lastActiveSourceScanTime: TimeInterval = 0
     private var activeSourceRefreshShouldClearIfEmpty = false
+    private var cachedOutputMuted: Bool = false
+    private var lastOutputMutePollTime: TimeInterval = 0
 
     private let progressTickInterval: TimeInterval = 1.0
     private let volumePollInterval: TimeInterval = 0.22
+    private let outputMutePollInterval: TimeInterval = 1.0
     private let outputVolumeEventThreshold = 0.045
     private let activeSourceScanThrottle: TimeInterval = 1.2
 
@@ -208,7 +211,7 @@ final class MusicManager: ObservableObject {
     }
 
     @MainActor
-    private func apply(_ trackInfo: TrackInfo) {
+    private func apply(_ trackInfo: TrackInfo, allowsPausedSourceLookup: Bool = true) {
         let payload = trackInfo.payload
 
         let newTrackTitle = payload.title ?? ""
@@ -229,12 +232,20 @@ final class MusicManager: ObservableObject {
             if isResolvingNowPlaying {
                 isResolvingNowPlaying = false
             }
-            scheduleActiveSourceRefresh(ignoring: bundleIdentifier, clearsCurrentIfNoActiveSource: true)
+            scheduleActiveSourceRefresh(
+                ignoring: bundleIdentifier,
+                fallbackPausedTrackInfo: nil,
+                clearsCurrentIfNoActiveSource: true
+            )
             return
         }
 
-        if !playing {
-            scheduleActiveSourceRefresh(ignoring: bundleIdentifier)
+        if !playing, allowsPausedSourceLookup {
+            scheduleActiveSourceRefresh(
+                ignoring: bundleIdentifier,
+                fallbackPausedTrackInfo: trackInfo
+            )
+            return
         }
 
         let newTrackIdentity = [
@@ -269,6 +280,12 @@ final class MusicManager: ObservableObject {
         if albumTitle != newAlbumTitle {
             albumTitle = newAlbumTitle
         }
+
+        if !playing {
+            currentPlaybackRate = 0
+            stopProgressTimer()
+        }
+
         if isPlaying != playing {
             isPlaying = playing
         }
@@ -347,13 +364,21 @@ final class MusicManager: ObservableObject {
             return
         }
 
-        let preparedArtwork = artwork.resizedForArtwork()
+        artworkImage = nil
+
+        let artworkPayload = autoreleasepool {
+            let preparedArtwork = artwork.resizedForArtwork()
+            let color = preparedArtwork.averageColor?.boostedForWaveform
+            return (image: preparedArtwork, color: color)
+        }
+
+        let preparedArtwork = artworkPayload.image
         artworkImage = preparedArtwork
         if !artworkAvailable {
             artworkAvailable = true
         }
 
-        if let avgColor = preparedArtwork.averageColor?.boostedForWaveform {
+        if let avgColor = artworkPayload.color {
             let nextWaveformColor = Color(nsColor: avgColor)
             if waveformColor != nextWaveformColor {
                 waveformColor = nextWaveformColor
@@ -630,7 +655,13 @@ final class MusicManager: ObservableObject {
             }
         }
 
-        let muted = SystemOutputVolume.isMuted() ?? false
+        let now = Date.timeIntervalSinceReferenceDate
+        if now - lastOutputMutePollTime >= outputMutePollInterval {
+            cachedOutputMuted = SystemOutputVolume.isMuted() ?? false
+            lastOutputMutePollTime = now
+        }
+
+        let muted = cachedOutputMuted
         let nextMuted = muted || nextVolume <= 0.01
 
         let currentDisplayVolume = nextMuted ? 0 : nextVolume
@@ -713,13 +744,18 @@ final class MusicManager: ObservableObject {
 
     @MainActor
     private func scheduleActiveSourceRefresh(ignoring ignoredBundleIdentifier: String) {
-        scheduleActiveSourceRefresh(ignoring: ignoredBundleIdentifier, clearsCurrentIfNoActiveSource: false)
+        scheduleActiveSourceRefresh(
+            ignoring: ignoredBundleIdentifier,
+            fallbackPausedTrackInfo: nil,
+            clearsCurrentIfNoActiveSource: false
+        )
     }
 
     @MainActor
     private func scheduleActiveSourceRefresh(
         ignoring ignoredBundleIdentifier: String,
-        clearsCurrentIfNoActiveSource: Bool
+        fallbackPausedTrackInfo: TrackInfo? = nil,
+        clearsCurrentIfNoActiveSource: Bool = false
     ) {
         if clearsCurrentIfNoActiveSource {
             activeSourceRefreshShouldClearIfEmpty = true
@@ -749,6 +785,8 @@ final class MusicManager: ObservableObject {
                        self.currentPlayerBundleIdentifier == sourceBundleIdentifierAtScan,
                        self.currentTrackIdentity == trackIdentityAtScan {
                         self.clearPlaybackState()
+                    } else if let fallbackPausedTrackInfo {
+                        self.apply(fallbackPausedTrackInfo, allowsPausedSourceLookup: false)
                     }
                     return
                 }
@@ -979,6 +1017,9 @@ private enum SystemOutputVolume {
     private static let mainElement = AudioObjectPropertyElement(kAudioObjectPropertyElementMain)
     private static let leftElement = AudioObjectPropertyElement(1)
     private static let rightElement = AudioObjectPropertyElement(2)
+    private static let defaultDeviceCacheDuration: TimeInterval = 5
+    private static var cachedDefaultOutputDeviceID: AudioDeviceID?
+    private static var cachedDefaultOutputDeviceReadTime: TimeInterval = 0
 
     static func currentVolume() -> Double? {
         guard let deviceID = defaultOutputDeviceID() else { return nil }
@@ -1080,6 +1121,12 @@ private enum SystemOutputVolume {
     }
 
     private static func defaultOutputDeviceID() -> AudioDeviceID? {
+        let now = Date.timeIntervalSinceReferenceDate
+        if let cachedDefaultOutputDeviceID,
+           now - cachedDefaultOutputDeviceReadTime < defaultDeviceCacheDuration {
+            return cachedDefaultOutputDeviceID
+        }
+
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDefaultOutputDevice,
             mScope: kAudioObjectPropertyScopeGlobal,
@@ -1098,9 +1145,13 @@ private enum SystemOutputVolume {
         )
 
         guard status == noErr, deviceID != AudioDeviceID(kAudioObjectUnknown) else {
+            cachedDefaultOutputDeviceID = nil
+            cachedDefaultOutputDeviceReadTime = now
             return nil
         }
 
+        cachedDefaultOutputDeviceID = deviceID
+        cachedDefaultOutputDeviceReadTime = now
         return deviceID
     }
 

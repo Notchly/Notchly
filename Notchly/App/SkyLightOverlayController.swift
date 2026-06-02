@@ -20,7 +20,7 @@ final class SkyLightOverlayController {
     private var lockScreenWindowCloseTask: Task<Void, Never>?
     private var currentScreenID: CGDirectDisplayID?
     private var currentScreen: NSScreen?
-    private var settingsCancellable: AnyCancellable?
+    private var displayTargetCancellable: AnyCancellable?
     private var lockStateCancellable: AnyCancellable?
 
     init(environment: AppEnvironment) {
@@ -38,8 +38,8 @@ final class SkyLightOverlayController {
         screenRefreshTask = nil
         lockScreenWindowCloseTask?.cancel()
         lockScreenWindowCloseTask = nil
-        settingsCancellable?.cancel()
-        settingsCancellable = nil
+        displayTargetCancellable?.cancel()
+        displayTargetCancellable = nil
         lockStateCancellable?.cancel()
         lockStateCancellable = nil
 
@@ -71,12 +71,10 @@ final class SkyLightOverlayController {
     }
 
     private func installSettingsObserver() {
-        guard settingsCancellable == nil else { return }
+        guard displayTargetCancellable == nil else { return }
 
-        settingsCancellable = Publishers.CombineLatest(
-            environment.settingsManager.$displayTarget.removeDuplicates(),
-            environment.settingsManager.$islandWidth.removeDuplicates()
-        )
+        displayTargetCancellable = environment.settingsManager.$displayTarget
+            .removeDuplicates()
             .dropFirst()
             .sink { [weak self] _ in
                 Task { @MainActor [weak self] in
@@ -134,15 +132,14 @@ final class SkyLightOverlayController {
         case .locked:
             lockScreenWindowCloseTask?.cancel()
             lockScreenWindowCloseTask = nil
-            closeIslandWindow()
+            hideIslandWindowForLock()
             showLockScreenWindow(on: screen)
 
         case .music:
             if lockScreenWindowController == nil {
                 showIslandWindow(on: screen)
             } else {
-                scheduleIslandWindowAfterUnlock(on: screen)
-                scheduleLockScreenWindowCloseAfterUnlock()
+                scheduleLockScreenWindowCloseAfterUnlock(on: screen)
             }
         }
     }
@@ -156,50 +153,42 @@ final class SkyLightOverlayController {
         islandWindowController?.window?.orderFrontRegardless()
     }
 
-    private func closeIslandWindow() {
-        islandWindowController?.close()
-        islandWindowController = nil
+    private func hideIslandWindowForLock() {
+        islandWindowController?.window?.orderOut(nil)
     }
 
     private func showLockScreenWindow(on screen: NSScreen) {
         guard lockScreenWindowController == nil else { return }
 
+        let windowFrame = lockScreenWindowFrame(for: screen)
+        let playerYPosition = lockScreenPlayerYPosition(for: screen)
         let view = AnyView(
             LockScreenOverlayRootView(
                 model: environment.lockScreenOverlayModel,
                 settingsManager: environment.settingsManager,
-                focusManager: environment.focusManager,
-                batteryManager: environment.batteryManager,
-                dynamicManager: environment.dynamicManager,
                 musicManager: environment.musicManager,
-                brightnessManager: environment.brightnessManager,
-                screenSize: screen.frame.size
+                screenSize: windowFrame.size,
+                lockScreenPlayerYPosition: playerYPosition,
+                initialClosedHeight: IslandHeightResolver.closedHeight(for: screen)
             )
         )
 
         lockScreenWindowController = SkyLightOperator.shared.delegateView(view, toScreen: screen)
+        lockScreenWindowController?.window?.setFrame(windowFrame, display: true)
         configureOverlayWindow(lockScreenWindowController?.window)
     }
 
-    private func scheduleIslandWindowAfterUnlock(on screen: NSScreen) {
-        Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .milliseconds(220))
-            guard !Task.isCancelled else { return }
-            guard self?.environment.lockScreenOverlayModel.state == .music else { return }
-            self?.showIslandWindow(on: screen)
-        }
-    }
-
-    private func scheduleLockScreenWindowCloseAfterUnlock() {
+    private func scheduleLockScreenWindowCloseAfterUnlock(on screen: NSScreen) {
         lockScreenWindowCloseTask?.cancel()
 
         lockScreenWindowCloseTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .milliseconds(420))
+            try? await Task.sleep(for: .milliseconds(190))
             guard !Task.isCancelled else { return }
             guard self?.environment.lockScreenOverlayModel.state == .music else { return }
 
             self?.lockScreenWindowController?.close()
             self?.lockScreenWindowController = nil
+            self?.showIslandWindow(on: screen)
             self?.lockScreenWindowCloseTask = nil
         }
     }
@@ -235,9 +224,10 @@ final class SkyLightOverlayController {
             musicManager: environment.musicManager,
             focusManager: environment.focusManager,
             brightnessManager: environment.brightnessManager,
+            agentEventManager: environment.agentEventManager,
             animationsEnabled: true
         )
-        .frame(width: size.width, height: size.height, alignment: .top)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
         window.contentViewController = NSHostingController(rootView: view)
         SkyLightOperator.shared.delegateWindow(window)
@@ -251,8 +241,27 @@ final class SkyLightOverlayController {
     }
 
     private var islandWindowSize: CGSize {
-        let baseWidth = min(max(CGFloat(environment.settingsManager.islandWidth), 280), 360)
-        return CGSize(width: baseWidth + 96, height: 280)
+        CGSize(width: 456, height: 280)
+    }
+
+    private func lockScreenPlayerYPosition(for screen: NSScreen) -> CGFloat {
+        min(max(screen.frame.height * 0.68, 500), screen.frame.height - 130)
+    }
+
+    private func lockScreenWindowFrame(for screen: NSScreen) -> NSRect {
+        let playerYPosition = lockScreenPlayerYPosition(for: screen)
+        let playerHeight: CGFloat = 168
+        let verticalPadding: CGFloat = 32
+        let requiredHeight = playerYPosition + playerHeight / 2 + verticalPadding
+        let height = min(screen.frame.height, max(280, requiredHeight))
+        let width = max(islandWindowSize.width, CGFloat(environment.settingsManager.islandWidth) + 40)
+
+        return NSRect(
+            x: screen.frame.midX - width / 2,
+            y: screen.frame.maxY - height,
+            width: width,
+            height: height
+        )
     }
 
     private func islandWindowFrame(for screen: NSScreen, size: CGSize) -> NSRect {
