@@ -355,13 +355,21 @@ final class MusicManager: ObservableObject {
             return
         }
 
-        let preparedArtwork = artwork.resizedForArtwork()
+        artworkImage = nil
+
+        let artworkPayload = autoreleasepool {
+            let preparedArtwork = artwork.resizedForArtwork()
+            let color = preparedArtwork.averageColor?.boostedForWaveform
+            return (image: preparedArtwork, color: color)
+        }
+
+        let preparedArtwork = artworkPayload.image
         artworkImage = preparedArtwork
         if !artworkAvailable {
             artworkAvailable = true
         }
 
-        if let avgColor = preparedArtwork.averageColor?.boostedForWaveform {
+        if let avgColor = artworkPayload.color {
             let nextWaveformColor = Color(nsColor: avgColor)
             if waveformColor != nextWaveformColor {
                 waveformColor = nextWaveformColor

@@ -9,14 +9,17 @@ import AppKit
 import SwiftUI
 
 extension NSImage {
-    func resizedForArtwork(maxPixelSize: CGFloat = 256) -> NSImage {
+    func resizedForArtwork(maxPixelSize: CGFloat = 96) -> NSImage {
         guard let cgImage = cgImage(forProposedRect: nil, context: nil, hints: nil) else {
             return self
         }
 
         let sourceSize = CGSize(width: cgImage.width, height: cgImage.height)
         let longestSide = max(sourceSize.width, sourceSize.height)
-        guard longestSide > maxPixelSize else { return self }
+        guard longestSide > maxPixelSize else {
+            cacheMode = .never
+            return self
+        }
 
         let scale = maxPixelSize / longestSide
         let targetSize = CGSize(
@@ -24,11 +27,30 @@ extension NSImage {
             height: max(1, floor(sourceSize.height * scale))
         )
 
-        let image = NSImage(size: targetSize)
-        image.lockFocus()
-        NSGraphicsContext.current?.imageInterpolation = .high
-        draw(in: CGRect(origin: .zero, size: targetSize))
-        image.unlockFocus()
+        let targetRect = CGRect(origin: .zero, size: targetSize)
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+
+        guard let context = CGContext(
+            data: nil,
+            width: Int(targetSize.width),
+            height: Int(targetSize.height),
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            return self
+        }
+
+        context.interpolationQuality = .high
+        context.draw(cgImage, in: targetRect)
+
+        guard let resizedCGImage = context.makeImage() else {
+            return self
+        }
+
+        let image = NSImage(cgImage: resizedCGImage, size: targetSize)
+        image.cacheMode = .never
         return image
     }
 

@@ -360,9 +360,20 @@ extension ContentView {
         guard settingsManager.showMusic else { return }
 
         if isPlaying {
+            defer { lastMusicPauseDate = nil }
+
+            guard let lastMusicPauseDate else {
+                handleMusicAutoExpand(isPlaying: true)
+                return
+            }
+
+            guard Date().timeIntervalSince(lastMusicPauseDate) >= 15 else { return }
+
             handleMusicAutoExpand(isPlaying: true)
             return
         }
+
+        lastMusicPauseDate = Date()
 
         guard status == .musicPreview else { return }
 
