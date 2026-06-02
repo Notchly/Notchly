@@ -213,7 +213,7 @@ extension ContentView {
                     }
                 }
 
-                if showsAgentActivity {
+                if hasPendingAgentEvent {
                     IslandClickCatcher {
                         openAgentSourceApp(agentEvent)
                     }

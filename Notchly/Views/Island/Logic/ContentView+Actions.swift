@@ -390,9 +390,25 @@ extension ContentView {
     }
 
     func openAgentSourceApp(_ event: AgentEvent?) {
-        guard let source = event?.source.lowercased() else { return }
+        guard let source = event?.source.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() else { return }
 
         let workspace = NSWorkspace.shared
+
+        if source == "codex" {
+            let codexBundleIdentifier = "com.openai.codex"
+
+            if let runningApp = workspace.runningApplications.first(where: {
+                $0.bundleIdentifier?.lowercased() == codexBundleIdentifier
+            }) {
+                runningApp.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
+                return
+            }
+
+            if let applicationURL = workspace.urlForApplication(withBundleIdentifier: codexBundleIdentifier) {
+                workspace.openApplication(at: applicationURL, configuration: NSWorkspace.OpenConfiguration())
+                return
+            }
+        }
 
         if let runningApp = workspace.runningApplications.first(where: { app in
             let bundleIdentifier = app.bundleIdentifier?.lowercased() ?? ""

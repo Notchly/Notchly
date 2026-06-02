@@ -58,15 +58,56 @@ struct GeneralSettingsView: View {
 
                     SettingsDivider()
 
-                    SettingsToggleRow(
-                        title: "Lock Sound",
-                        subtitle: "Play a subtle sound when the lock screen state changes.",
-                        isOn: $settingsManager.enableLockSound
+                    UnlockSoundSettingsRow(
+                        isEnabled: $settingsManager.enableLockSound
                     )
                 }
             }
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+}
+
+private struct UnlockSoundSettingsRow: View {
+    @Binding var isEnabled: Bool
+
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text("Unlock Sound")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.primary)
+
+                    Button {
+                        UnlockSoundPlayer.shared.play(bypassThrottle: true)
+                    } label: {
+                        Image(systemName: "play.fill")
+                            .font(.system(size: 7, weight: .bold))
+                            .foregroundStyle(.white.opacity(0.78))
+                            .frame(width: 18, height: 18)
+                            .background(.white.opacity(0.12))
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Preview Unlock Sound")
+                }
+
+                Text("Play a subtle sound when your Mac unlocks.")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: 16)
+
+            Toggle("", isOn: $isEnabled)
+                .toggleStyle(.switch)
+                .labelsHidden()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity)
     }
 }
 
@@ -80,6 +121,24 @@ struct CodexSettingsView: View {
                 VStack(spacing: 0) {
                     CodexHookIntegrationRow(
                         manager: codexHookIntegrationManager
+                    )
+
+                    SettingsDivider()
+
+                    CodexAlertSoundSettingsRow(
+                        title: "Need Approval Sound",
+                        subtitle: "Play a subtle sound when Codex is waiting for approval.",
+                        kind: .accessRequest,
+                        isEnabled: $settingsManager.enableCodexApprovalAlertSound
+                    )
+
+                    SettingsDivider()
+
+                    CodexAlertSoundSettingsRow(
+                        title: "Task Completed Sound",
+                        subtitle: "Play a subtle sound when Codex finishes a task.",
+                        kind: .completed,
+                        isEnabled: $settingsManager.enableCodexCompletedAlertSound
                     )
 
                     SettingsDivider()
@@ -119,6 +178,62 @@ struct CodexSettingsView: View {
             codexHookIntegrationManager.refreshStatus()
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+}
+
+private struct CodexAlertSoundSettingsRow: View {
+    let title: String
+    let subtitle: String
+    let kind: AgentEventKind
+    @Binding var isEnabled: Bool
+
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(title)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.primary)
+
+                    previewButton(
+                        kind: kind,
+                        accessibilityLabel: "Preview \(title)"
+                    )
+                }
+
+                Text(subtitle)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: 16)
+
+            Toggle("", isOn: $isEnabled)
+                .toggleStyle(.switch)
+                .labelsHidden()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity)
+    }
+
+    private func previewButton(
+        kind: AgentEventKind,
+        accessibilityLabel: String
+    ) -> some View {
+        Button {
+            CodexAlertSoundPlayer.shared.play(for: kind, bypassThrottle: true)
+        } label: {
+            Image(systemName: "play.fill")
+                .font(.system(size: 7, weight: .bold))
+                .foregroundStyle(.white.opacity(0.78))
+                .frame(width: 18, height: 18)
+                .background(.white.opacity(0.12))
+                .clipShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel)
     }
 }
 

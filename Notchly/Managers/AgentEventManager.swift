@@ -7,6 +7,7 @@
 
 import Foundation
 import Combine
+import AppKit
 
 enum AgentEventKind: String, Decodable {
     case accessRequest = "access_request"
@@ -226,6 +227,7 @@ final class AgentEventManager: ObservableObject {
         currentEvent = event
         eventID += 1
         debugLog("show event source=\(event.source) kind=\(event.kind.rawValue) ttl=\(event.ttl)")
+        playCodexAlertSoundIfNeeded(for: event)
 
         clearTask?.cancel()
         guard shouldAutoClear(event) else {
@@ -267,6 +269,24 @@ final class AgentEventManager: ObservableObject {
         }
 
         return true
+    }
+
+    private func playCodexAlertSoundIfNeeded(for event: AgentEvent) {
+        guard event.source.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "codex" else { return }
+        guard event.kind != .clear else { return }
+
+        switch event.kind {
+        case .accessRequest, .waiting:
+            guard settingsManager.enableCodexApprovalAlertSound else { return }
+        case .completed:
+            guard settingsManager.enableCodexCompletedAlertSound else { return }
+        case .failed, .cancelled, .started, .progress:
+            guard settingsManager.enableCodexCompletedAlertSound else { return }
+        case .clear:
+            return
+        }
+
+        CodexAlertSoundPlayer.shared.play(for: event.kind)
     }
 
     private func duplicateKey(for event: AgentEvent) -> String {
@@ -416,5 +436,44 @@ final class AgentEventManager: ObservableObject {
         #if AGENT_EVENT_DEBUG
         print("[AgentEvent] \(message())")
         #endif
+    }
+}
+
+@MainActor
+final class CodexAlertSoundPlayer {
+    static let shared = CodexAlertSoundPlayer()
+
+    private let approvalSound = NSSound(named: NSSound.Name("Ping"))
+    private let completedSound = NSSound(named: NSSound.Name("Glass"))
+    private let fallbackSound = NSSound(named: NSSound.Name("Submarine"))
+    private var lastPlayDate: Date?
+
+    private init() {}
+
+    func play(for kind: AgentEventKind, bypassThrottle: Bool = false) {
+        let now = Date()
+        if !bypassThrottle, let lastPlayDate, now.timeIntervalSince(lastPlayDate) < 0.35 {
+            return
+        }
+
+        guard let sound = sound(for: kind) else { return }
+
+        lastPlayDate = now
+        sound.stop()
+        sound.volume = kind == .accessRequest ? 0.24 : 0.18
+        sound.play()
+    }
+
+    private func sound(for kind: AgentEventKind) -> NSSound? {
+        switch kind {
+        case .accessRequest, .waiting:
+            return approvalSound ?? fallbackSound
+        case .completed:
+            return completedSound ?? fallbackSound
+        case .failed, .cancelled:
+            return fallbackSound ?? approvalSound ?? completedSound
+        case .clear, .started, .progress:
+            return completedSound ?? fallbackSound
+        }
     }
 }

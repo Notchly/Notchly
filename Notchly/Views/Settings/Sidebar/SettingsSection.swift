@@ -74,7 +74,7 @@ enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
         case .music:
             return "Customize now playing controls and previews."
         case .codex:
-            return "Configure Codex hooks and alert timing."
+            return "Configure Codex hooks, sound, and alert timing."
         case .battery:
             return "Control battery indicators and charging feedback."
         case .about:

@@ -27,19 +27,20 @@ final class UnlockSoundPlayer {
         sound?.volume = 0.15
     }
 
-    func play() {
+    func play(bypassThrottle: Bool = false) {
         guard let sound else { return }
 
         let now = Date()
-        if let lastPlayDate, now.timeIntervalSince(lastPlayDate) < 0.5 {
+        if !bypassThrottle, let lastPlayDate, now.timeIntervalSince(lastPlayDate) < 0.5 {
             return
         }
 
-        if sound.isPlaying {
+        if sound.isPlaying, !bypassThrottle {
             return
         }
 
         lastPlayDate = now
+        sound.stop()
         sound.volume = 0.15
         sound.play()
     }
