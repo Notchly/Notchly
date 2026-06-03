@@ -114,13 +114,24 @@ private struct UnlockSoundSettingsRow: View {
 struct CodexSettingsView: View {
     @ObservedObject var settingsManager: SettingsManager
     @ObservedObject var codexHookIntegrationManager: CodexHookIntegrationManager
+    @ObservedObject var cursorHookIntegrationManager: CursorHookIntegrationManager
 
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
             SettingsCard {
                 VStack(spacing: 0) {
-                    CodexHookIntegrationRow(
-                        manager: codexHookIntegrationManager
+                    AgentHookIntegrationRow(
+                        title: "Codex Alerts",
+                        manager: codexHookIntegrationManager,
+                        description: "Shows Codex approval and completion alerts using transparent local hooks."
+                    )
+
+                    SettingsDivider()
+
+                    AgentHookIntegrationRow(
+                        title: "Cursor Alerts",
+                        manager: cursorHookIntegrationManager,
+                        description: "Shows Cursor shell approval and completion alerts using local Cursor hooks."
                     )
 
                     SettingsDivider()
@@ -173,9 +184,13 @@ struct CodexSettingsView: View {
                 }
             }
         }
-        .onAppear(perform: codexHookIntegrationManager.refreshStatus)
+        .onAppear {
+            codexHookIntegrationManager.refreshStatus()
+            cursorHookIntegrationManager.refreshStatus()
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             codexHookIntegrationManager.refreshStatus()
+            cursorHookIntegrationManager.refreshStatus()
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
     }
@@ -237,8 +252,21 @@ private struct CodexAlertSoundSettingsRow: View {
     }
 }
 
-private struct CodexHookIntegrationRow: View {
-    @ObservedObject var manager: CodexHookIntegrationManager
+private protocol AgentHookIntegrationManaging: ObservableObject {
+    var installState: AgentHookInstallState { get }
+    var isInstalled: Bool { get }
+    var configPreview: String { get }
+    func refreshStatus()
+    func install()
+}
+
+extension CodexHookIntegrationManager: AgentHookIntegrationManaging {}
+extension CursorHookIntegrationManager: AgentHookIntegrationManaging {}
+
+private struct AgentHookIntegrationRow<Manager: AgentHookIntegrationManaging>: View {
+    let title: String
+    @ObservedObject var manager: Manager
+    let description: String
     @State private var isPreviewVisible = false
 
     var body: some View {
@@ -246,7 +274,7 @@ private struct CodexHookIntegrationRow: View {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 8) {
-                        Text("Codex Alerts")
+                        Text(title)
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(.primary)
 
@@ -306,7 +334,7 @@ private struct CodexHookIntegrationRow: View {
 
             if isPreviewVisible {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Notchly only adds this local Codex Stop hook. It writes a completion event file and does not read prompts or responses.")
+                    Text("Notchly only adds local hook commands. They write small status events and do not read prompts or responses.")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -364,7 +392,7 @@ private struct CodexHookIntegrationRow: View {
             return message
         }
 
-        return "Shows Codex completion alerts using a transparent local Stop hook."
+        return description
     }
 
     private var installButtonTitle: String {

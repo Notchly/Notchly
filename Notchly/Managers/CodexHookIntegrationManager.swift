@@ -10,15 +10,7 @@ import Combine
 
 @MainActor
 final class CodexHookIntegrationManager: ObservableObject {
-    enum InstallState {
-        case unknown
-        case installing
-        case installed
-        case notInstalled
-        case failed(String)
-    }
-
-    @Published private(set) var installState: InstallState = .unknown
+    @Published private(set) var installState: AgentHookInstallState = .unknown
 
     private let fileManager = FileManager.default
 

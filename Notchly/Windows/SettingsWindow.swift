@@ -12,13 +12,16 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     private var window: NSWindow?
     private let settingsManager: SettingsManager
     private let codexHookIntegrationManager: CodexHookIntegrationManager
+    private let cursorHookIntegrationManager: CursorHookIntegrationManager
 
     init(
         settingsManager: SettingsManager,
-        codexHookIntegrationManager: CodexHookIntegrationManager
+        codexHookIntegrationManager: CodexHookIntegrationManager,
+        cursorHookIntegrationManager: CursorHookIntegrationManager
     ) {
         self.settingsManager = settingsManager
         self.codexHookIntegrationManager = codexHookIntegrationManager
+        self.cursorHookIntegrationManager = cursorHookIntegrationManager
         super.init()
     }
 
@@ -35,7 +38,8 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
 
         let rootView = SettingsView(
             settingsManager: settingsManager,
-            codexHookIntegrationManager: codexHookIntegrationManager
+            codexHookIntegrationManager: codexHookIntegrationManager,
+            cursorHookIntegrationManager: cursorHookIntegrationManager
         )
             .ignoresSafeArea(.container, edges: .top)
 

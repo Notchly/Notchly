@@ -194,9 +194,14 @@ final class MusicManager: ObservableObject {
 
     private func bindMediaController() {
         mediaController.onTrackInfoReceived = { [weak self] trackInfo in
-            guard let self, let trackInfo else { return }
+            guard let self else { return }
 
             Task { @MainActor in
+                guard let trackInfo else {
+                    self.recoverActiveSourceOrClear(ignoring: self.currentPlayerBundleIdentifier)
+                    return
+                }
+
                 self.apply(trackInfo)
             }
         }
@@ -205,7 +210,7 @@ final class MusicManager: ObservableObject {
             guard let self else { return }
 
             Task { @MainActor in
-                self.clearPlaybackState()
+                self.recoverActiveSourceOrClear(ignoring: self.currentPlayerBundleIdentifier)
             }
         }
     }
@@ -346,7 +351,7 @@ final class MusicManager: ObservableObject {
         guard !currentPlayerBundleIdentifier.isEmpty else { return }
         guard bundleIdentifier == currentPlayerBundleIdentifier else { return }
 
-        clearPlaybackState()
+        recoverActiveSourceOrClear(ignoring: bundleIdentifier)
     }
 
     @MainActor
@@ -755,7 +760,8 @@ final class MusicManager: ObservableObject {
     private func scheduleActiveSourceRefresh(
         ignoring ignoredBundleIdentifier: String,
         fallbackPausedTrackInfo: TrackInfo? = nil,
-        clearsCurrentIfNoActiveSource: Bool = false
+        clearsCurrentIfNoActiveSource: Bool = false,
+        force: Bool = false
     ) {
         if clearsCurrentIfNoActiveSource {
             activeSourceRefreshShouldClearIfEmpty = true
@@ -763,7 +769,7 @@ final class MusicManager: ObservableObject {
 
         let now = Date.timeIntervalSinceReferenceDate
         guard activeSourceRefreshTask == nil else { return }
-        guard now - lastActiveSourceScanTime >= activeSourceScanThrottle else { return }
+        guard force || now - lastActiveSourceScanTime >= activeSourceScanThrottle else { return }
 
         lastActiveSourceScanTime = now
         let sourceBundleIdentifierAtScan = currentPlayerBundleIdentifier
@@ -796,6 +802,16 @@ final class MusicManager: ObservableObject {
         }
     }
 
+    @MainActor
+    private func recoverActiveSourceOrClear(ignoring ignoredBundleIdentifier: String) {
+        scheduleActiveSourceRefresh(
+            ignoring: ignoredBundleIdentifier,
+            fallbackPausedTrackInfo: nil,
+            clearsCurrentIfNoActiveSource: true,
+            force: true
+        )
+    }
+
     private func fetchFirstPlayingTrackInfo(ignoring ignoredBundleIdentifier: String) async -> TrackInfo? {
         for bundleIdentifier in activePlayerCandidateBundleIdentifiers where bundleIdentifier != ignoredBundleIdentifier {
             guard let trackInfo = await fetchTrackInfo(for: bundleIdentifier) else { continue }
@@ -817,14 +833,15 @@ final class MusicManager: ObservableObject {
 
     private var activePlayerCandidateBundleIdentifiers: [String] {
         [
+            "com.spotify.client",
             "com.apple.Music",
+            "com.google.android.youtube",
             "com.google.Chrome",
             "com.apple.Safari",
             "com.brave.Browser",
             "org.mozilla.firefox",
             "com.microsoft.edgemac",
-            "company.thebrowser.Browser",
-            "com.spotify.client"
+            "company.thebrowser.Browser"
         ]
     }
 

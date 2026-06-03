@@ -49,13 +49,20 @@ struct AgentActivityView: View {
 
     @ViewBuilder
     private var sourceIcon: some View {
-        if event?.source.lowercased() == "codex" {
+        switch event?.source.lowercased() {
+        case "codex":
             Image("CodexAgentIcon")
                 .resizable()
                 .renderingMode(.original)
                 .scaledToFit()
                 .frame(width: 22, height: 22)
-        } else {
+        case "cursor":
+            Image("CursorAgentIcon")
+                .resizable()
+                .renderingMode(.original)
+                .scaledToFit()
+                .frame(width: 22, height: 22)
+        default:
             Image(systemName: sourceIconName)
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(sourceIconColor)
@@ -69,6 +76,8 @@ struct AgentActivityView: View {
         switch source {
         case "codex":
             return "terminal.fill"
+        case "cursor":
+            return "cursorarrow"
         default:
             return "sparkles"
         }
@@ -78,6 +87,8 @@ struct AgentActivityView: View {
         switch event?.source.lowercased() {
         case "codex":
             return Color(red: 0.50, green: 0.80, blue: 1.0)
+        case "cursor":
+            return Color(red: 0.62, green: 0.72, blue: 1.0)
         default:
             return .white.opacity(0.78)
         }

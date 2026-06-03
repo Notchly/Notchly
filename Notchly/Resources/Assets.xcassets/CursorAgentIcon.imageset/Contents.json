@@ -1,0 +1,23 @@
+{
+  "images" : [
+    {
+      "filename" : "CursorAgentIcon_24x24.svg",
+      "idiom" : "universal",
+      "scale" : "1x"
+    },
+    {
+      "filename" : "CursorAgentIcon_48x48.svg",
+      "idiom" : "universal",
+      "scale" : "2x"
+    },
+    {
+      "filename" : "CursorAgentIcon_96x96.svg",
+      "idiom" : "universal",
+      "scale" : "3x"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

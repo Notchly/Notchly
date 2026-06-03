@@ -29,6 +29,7 @@ final class AppEnvironment {
     let brightnessManager = BrightnessManager()
     lazy var agentEventManager = AgentEventManager(settingsManager: settingsManager)
     let codexHookIntegrationManager = CodexHookIntegrationManager()
+    let cursorHookIntegrationManager = CursorHookIntegrationManager()
     let lockScreenOverlayModel = LockScreenOverlayModel()
 
     let updaterController = SPUStandardUpdaterController(
@@ -48,7 +49,8 @@ final class AppEnvironment {
 
     lazy var settingsWindow = SettingsWindow(
         settingsManager: settingsManager,
-        codexHookIntegrationManager: codexHookIntegrationManager
+        codexHookIntegrationManager: codexHookIntegrationManager,
+        cursorHookIntegrationManager: cursorHookIntegrationManager
     )
 }
 

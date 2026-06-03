@@ -394,17 +394,15 @@ extension ContentView {
 
         let workspace = NSWorkspace.shared
 
-        if source == "codex" {
-            let codexBundleIdentifier = "com.openai.codex"
-
+        for bundleIdentifier in agentBundleIdentifiers(for: source) {
             if let runningApp = workspace.runningApplications.first(where: {
-                $0.bundleIdentifier?.lowercased() == codexBundleIdentifier
+                $0.bundleIdentifier?.lowercased() == bundleIdentifier
             }) {
                 runningApp.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
                 return
             }
 
-            if let applicationURL = workspace.urlForApplication(withBundleIdentifier: codexBundleIdentifier) {
+            if let applicationURL = workspace.urlForApplication(withBundleIdentifier: bundleIdentifier) {
                 workspace.openApplication(at: applicationURL, configuration: NSWorkspace.OpenConfiguration())
                 return
             }
@@ -414,19 +412,50 @@ extension ContentView {
             let bundleIdentifier = app.bundleIdentifier?.lowercased() ?? ""
             let localizedName = app.localizedName?.lowercased() ?? ""
 
-            if source == "codex" {
-                return bundleIdentifier.contains("codex") ||
-                localizedName == "codex" ||
-                localizedName.contains("codex")
-            }
-
-            return false
+            return agentSourceMatchesRunningApplication(
+                source: source,
+                bundleIdentifier: bundleIdentifier,
+                localizedName: localizedName
+            )
         }) {
             runningApp.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
             return
         }
 
         return
+    }
+
+    private func agentBundleIdentifiers(for source: String) -> [String] {
+        switch source {
+        case "codex":
+            return ["com.openai.codex"]
+        case "cursor":
+            return [
+                "com.todesktop.230313mzl4w4u92",
+                "com.cursor.Cursor"
+            ]
+        default:
+            return []
+        }
+    }
+
+    private func agentSourceMatchesRunningApplication(
+        source: String,
+        bundleIdentifier: String,
+        localizedName: String
+    ) -> Bool {
+        switch source {
+        case "codex":
+            return bundleIdentifier.contains("codex") ||
+            localizedName == "codex" ||
+            localizedName.contains("codex")
+        case "cursor":
+            return bundleIdentifier.contains("cursor") ||
+            localizedName == "cursor" ||
+            localizedName.contains("cursor")
+        default:
+            return false
+        }
     }
 
     func scheduleAutoClose(after seconds: Double = 2.0) {

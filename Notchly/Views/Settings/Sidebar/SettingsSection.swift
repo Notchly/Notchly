@@ -13,7 +13,7 @@ enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
     case brightness = "Brightness"
     case sound = "Sound"
     case music = "Now Playing"
-    case codex = "Codex"
+    case codex = "AI Agents"
     case battery = "Battery"
     case about = "About"
 
@@ -74,7 +74,7 @@ enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
         case .music:
             return "Customize now playing controls and previews."
         case .codex:
-            return "Configure Codex hooks, sound, and alert timing."
+            return "Configure agent hooks, sounds, and alert timing."
         case .battery:
             return "Control battery indicators and charging feedback."
         case .about:

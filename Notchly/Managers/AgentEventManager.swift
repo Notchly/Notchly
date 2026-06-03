@@ -33,6 +33,8 @@ struct AgentEvent: Identifiable, Equatable {
         switch source.lowercased() {
         case "codex":
             return "Codex"
+        case "cursor":
+            return "Cursor"
         default:
             return source
         }
@@ -264,7 +266,7 @@ final class AgentEventManager: ObservableObject {
 
     private func shouldAutoClear(_ event: AgentEvent) -> Bool {
         let source = event.source.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        if source == "codex", event.kind == .accessRequest {
+        if Self.stickyApprovalSources.contains(source), event.kind == .accessRequest {
             return false
         }
 
@@ -336,11 +338,13 @@ final class AgentEventManager: ObservableObject {
             return "Task completed"
         }
 
+        let normalizedSource = source.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+
         switch kind {
         case .clear:
             return ""
         case .accessRequest:
-            if source.lowercased() == "codex" {
+            if Self.stickyApprovalSources.contains(normalizedSource) {
                 return "Need approval"
             }
             return "Access requested"
@@ -361,8 +365,18 @@ final class AgentEventManager: ObservableObject {
 
     private func isAllowedSource(_ source: String) -> Bool {
         let normalizedSource = source.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return normalizedSource == "codex"
+        return Self.allowedSources.contains(normalizedSource)
     }
+
+    private static let allowedSources: Set<String> = [
+        "codex",
+        "cursor"
+    ]
+
+    private static let stickyApprovalSources: Set<String> = [
+        "codex",
+        "cursor"
+    ]
 
     private func ensureEventsFile() throws {
         try fileManager.createDirectory(
