@@ -54,6 +54,7 @@ final class SettingsManager: ObservableObject {
         static let enableAppleMusicAppleScriptControl = false
         static let launchAtLogin = false
         static let enableLockSound = true
+        static let hideNotchWhenFullscreen = false
         static let showFocusAnimations = true
         static let focusAnimationDuration = 2.0
         static let hideFocusLabel = false
@@ -111,6 +112,10 @@ final class SettingsManager: ObservableObject {
     
     @Published var enableLockSound: Bool {
         didSet { UserDefaults.standard.set(enableLockSound, forKey: "enableLockSound") }
+    }
+
+    @Published var hideNotchWhenFullscreen: Bool {
+        didSet { UserDefaults.standard.set(hideNotchWhenFullscreen, forKey: "hideNotchWhenFullscreen") }
     }
 
     @Published var showFocusAnimations: Bool {
@@ -183,6 +188,7 @@ final class SettingsManager: ObservableObject {
         let systemLaunchAtLogin = SMAppService.mainApp.status == .enabled
         self.launchAtLogin = savedLaunchAtLogin ?? systemLaunchAtLogin
         self.enableLockSound = UserDefaults.standard.object(forKey: "enableLockSound") as? Bool ?? Defaults.enableLockSound
+        self.hideNotchWhenFullscreen = UserDefaults.standard.object(forKey: "hideNotchWhenFullscreen") as? Bool ?? Defaults.hideNotchWhenFullscreen
         self.showFocusAnimations = UserDefaults.standard.object(forKey: "showFocusAnimations") as? Bool ?? Defaults.showFocusAnimations
         self.focusAnimationDuration = UserDefaults.standard.object(forKey: "focusAnimationDuration") as? Double ?? Defaults.focusAnimationDuration
         self.hideFocusLabel = UserDefaults.standard.object(forKey: "hideFocusLabel") as? Bool ?? Defaults.hideFocusLabel
@@ -209,6 +215,7 @@ final class SettingsManager: ObservableObject {
         displayTarget = Defaults.displayTarget
         launchAtLogin = Defaults.launchAtLogin
         enableLockSound = Defaults.enableLockSound
+        hideNotchWhenFullscreen = Defaults.hideNotchWhenFullscreen
     }
 
     func resetFocusSettings() {

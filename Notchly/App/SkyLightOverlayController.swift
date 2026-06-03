@@ -21,7 +21,10 @@ final class SkyLightOverlayController {
     private var currentScreenID: CGDirectDisplayID?
     private var currentScreen: NSScreen?
     private var displayTargetCancellable: AnyCancellable?
+    private var hideWhenFullscreenCancellable: AnyCancellable?
     private var lockStateCancellable: AnyCancellable?
+    private var fullscreenDetectionTask: Task<Void, Never>?
+    private var isIslandHiddenForFullscreen = false
 
     init(environment: AppEnvironment) {
         self.environment = environment
@@ -38,10 +41,15 @@ final class SkyLightOverlayController {
         screenRefreshTask = nil
         lockScreenWindowCloseTask?.cancel()
         lockScreenWindowCloseTask = nil
+        fullscreenDetectionTask?.cancel()
+        fullscreenDetectionTask = nil
         displayTargetCancellable?.cancel()
         displayTargetCancellable = nil
+        hideWhenFullscreenCancellable?.cancel()
+        hideWhenFullscreenCancellable = nil
         lockStateCancellable?.cancel()
         lockStateCancellable = nil
+        isIslandHiddenForFullscreen = false
 
         if let screenChangeObserver {
             NotificationCenter.default.removeObserver(screenChangeObserver)
@@ -82,12 +90,21 @@ final class SkyLightOverlayController {
                 }
             }
 
+        hideWhenFullscreenCancellable = environment.settingsManager.$hideNotchWhenFullscreen
+            .removeDuplicates()
+            .sink { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.updateFullscreenMonitoring()
+                }
+            }
+
         lockStateCancellable = environment.lockScreenOverlayModel.$state
             .removeDuplicates()
             .dropFirst()
             .sink { [weak self] _ in
                 Task { @MainActor [weak self] in
                     self?.updateOverlayWindows()
+                    self?.updateFullscreenMonitoring()
                 }
             }
     }
@@ -122,6 +139,7 @@ final class SkyLightOverlayController {
         currentScreen = screen
         currentScreenID = screenID
         updateOverlayWindows()
+        updateFullscreenMonitoring()
     }
 
     private func updateOverlayWindows() {
@@ -132,6 +150,7 @@ final class SkyLightOverlayController {
         case .locked:
             lockScreenWindowCloseTask?.cancel()
             lockScreenWindowCloseTask = nil
+            setIslandHiddenForFullscreen(false, on: screen)
             hideIslandWindowForLock()
             showLockScreenWindow(on: screen)
 
@@ -150,7 +169,11 @@ final class SkyLightOverlayController {
         }
 
         updateIslandWindowFrame(on: screen)
-        islandWindowController?.window?.orderFrontRegardless()
+        if isIslandHiddenForFullscreen {
+            islandWindowController?.window?.orderOut(nil)
+        } else {
+            islandWindowController?.window?.orderFrontRegardless()
+        }
     }
 
     private func hideIslandWindowForLock() {
@@ -189,7 +212,124 @@ final class SkyLightOverlayController {
             self?.lockScreenWindowController?.close()
             self?.lockScreenWindowController = nil
             self?.showIslandWindow(on: screen)
+            self?.updateFullscreenMonitoring()
             self?.lockScreenWindowCloseTask = nil
+        }
+    }
+
+    private func updateFullscreenMonitoring() {
+        let shouldMonitor = environment.settingsManager.hideNotchWhenFullscreen &&
+            environment.lockScreenOverlayModel.state == .music
+
+        guard shouldMonitor else {
+            fullscreenDetectionTask?.cancel()
+            fullscreenDetectionTask = nil
+
+            if let screen = currentScreen ?? targetScreen() {
+                setIslandHiddenForFullscreen(false, on: screen)
+            }
+            return
+        }
+
+        if fullscreenDetectionTask == nil {
+            fullscreenDetectionTask = Task { @MainActor [weak self] in
+                while !Task.isCancelled {
+                    self?.evaluateFullscreenVisibility()
+                    try? await Task.sleep(for: .milliseconds(650))
+                }
+            }
+        }
+
+        evaluateFullscreenVisibility()
+    }
+
+    private func evaluateFullscreenVisibility() {
+        guard environment.settingsManager.hideNotchWhenFullscreen,
+              environment.lockScreenOverlayModel.state == .music,
+              let screen = currentScreen ?? targetScreen() else {
+            return
+        }
+
+        setIslandHiddenForFullscreen(isFullscreenAppActive(on: screen), on: screen)
+    }
+
+    private func setIslandHiddenForFullscreen(_ hidden: Bool, on screen: NSScreen) {
+        guard isIslandHiddenForFullscreen != hidden else { return }
+
+        isIslandHiddenForFullscreen = hidden
+
+        if hidden {
+            islandWindowController?.window?.orderOut(nil)
+        } else if environment.lockScreenOverlayModel.state == .music {
+            showIslandWindow(on: screen)
+        }
+    }
+
+    private func isFullscreenAppActive(on screen: NSScreen) -> Bool {
+        guard let frontmostApplication = NSWorkspace.shared.frontmostApplication,
+              frontmostApplication.processIdentifier != ProcessInfo.processInfo.processIdentifier else {
+            return false
+        }
+
+        let targetPID = frontmostApplication.processIdentifier
+        let screenSize = screen.frame.size
+        let windowInfoList = CGWindowListCopyWindowInfo(
+            [.optionOnScreenOnly, .excludeDesktopElements],
+            kCGNullWindowID
+        ) as? [[String: Any]]
+
+        return windowInfoList?.contains { info in
+            guard windowOwnerPID(in: info) == targetPID,
+                  (info[kCGWindowLayer as String] as? Int) == 0,
+                  let bounds = windowBounds(in: info) else {
+                return false
+            }
+
+            return bounds.width >= screenSize.width - 4 && bounds.height >= screenSize.height - 4
+        } ?? false
+    }
+
+    private func windowOwnerPID(in info: [String: Any]) -> pid_t? {
+        if let pid = info[kCGWindowOwnerPID as String] as? pid_t {
+            return pid
+        }
+
+        if let pid = info[kCGWindowOwnerPID as String] as? Int {
+            return pid_t(pid)
+        }
+
+        return nil
+    }
+
+    private func windowBounds(in info: [String: Any]) -> CGRect? {
+        guard let boundsInfo = info[kCGWindowBounds as String] as? [String: Any] else {
+            return nil
+        }
+
+        let x = numericValue(boundsInfo["X"]) ?? 0
+        let y = numericValue(boundsInfo["Y"]) ?? 0
+        guard let width = numericValue(boundsInfo["Width"]),
+              let height = numericValue(boundsInfo["Height"]) else {
+            return nil
+        }
+
+        return CGRect(x: x, y: y, width: width, height: height)
+    }
+
+    private func numericValue(_ value: Any?) -> CGFloat? {
+        switch value {
+        case let value as CGFloat:
+            return value
+        case let value as Double:
+            return CGFloat(value)
+        case let value as Float:
+            return CGFloat(value)
+        case let value as Int:
+            return CGFloat(value)
+        case let value as NSNumber:
+            return CGFloat(truncating: value)
+        default:
+            return nil
         }
     }
 

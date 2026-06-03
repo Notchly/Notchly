@@ -42,11 +42,6 @@ struct AgentActivityView: View {
         event?.title ?? "Task completed"
     }
 
-    private var showsTrailingWaveform: Bool {
-        guard let event else { return false }
-        return true
-    }
-
     @ViewBuilder
     private var sourceIcon: some View {
         switch event?.source.lowercased() {

@@ -58,6 +58,14 @@ struct GeneralSettingsView: View {
 
                     SettingsDivider()
 
+                    SettingsToggleRow(
+                        title: "Hide in Fullscreen",
+                        subtitle: "Hide the island while the active app is fullscreen.",
+                        isOn: $settingsManager.hideNotchWhenFullscreen
+                    )
+
+                    SettingsDivider()
+
                     UnlockSoundSettingsRow(
                         isEnabled: $settingsManager.enableLockSound
                     )
