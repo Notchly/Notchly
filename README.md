@@ -124,6 +124,12 @@ xcodebuild -project Notchly.xcodeproj -scheme Notchly -configuration Debug build
 - [SkyLightWindow](https://github.com/Lakr233/SkyLightWindow) for overlay windows.
 - [mediaremote-adapter](https://github.com/ejbills/mediaremote-adapter) for Now Playing / MediaRemote access.
 
+## Star History
+
+<a href="https://www.star-history.com/#Notchly/Notchly&Date">
+  <img src="https://api.star-history.com/svg?repos=Notchly/Notchly&type=Date" alt="Notchly star history chart">
+</a>
+
 ## Contributing
 
 Pull requests are welcome.
