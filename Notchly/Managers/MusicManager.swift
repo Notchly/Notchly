@@ -49,6 +49,7 @@ final class MusicManager: ObservableObject {
     nonisolated private let mediaController = MediaController()
     private var progressTask: Task<Void, Never>?
     private var activeSourceRefreshTask: Task<Void, Never>?
+    private var pausedPlaybackValidationTask: Task<Void, Never>?
     private var startupTask: Task<Void, Never>?
     private var volumePollTimer: Timer?
     private var appTerminationObserver: NSObjectProtocol?
@@ -132,6 +133,8 @@ final class MusicManager: ObservableObject {
         progressTask = nil
         activeSourceRefreshTask?.cancel()
         activeSourceRefreshTask = nil
+        pausedPlaybackValidationTask?.cancel()
+        pausedPlaybackValidationTask = nil
         volumePollTimer?.invalidate()
         volumePollTimer = nil
         mediaController.stopListening()
@@ -143,6 +146,7 @@ final class MusicManager: ObservableObject {
         startupTask?.cancel()
         progressTask?.cancel()
         activeSourceRefreshTask?.cancel()
+        pausedPlaybackValidationTask?.cancel()
         volumePollTimer?.invalidate()
         if let appTerminationObserver {
             NSWorkspace.shared.notificationCenter.removeObserver(appTerminationObserver)
@@ -294,6 +298,9 @@ final class MusicManager: ObservableObject {
         if isPlaying != playing {
             isPlaying = playing
         }
+        if playing {
+            stopPausedPlaybackValidation()
+        }
         if durationMs != newDurationMs {
             durationMs = newDurationMs
         }
@@ -327,6 +334,10 @@ final class MusicManager: ObservableObject {
         }
 
         syncProgressTimerState()
+
+        if !playing, hasNowPlayingContent {
+            schedulePausedPlaybackValidation(bundleIdentifier: bundleIdentifier)
+        }
     }
 
     private func observePlayerTermination() {
@@ -737,6 +748,8 @@ final class MusicManager: ObservableObject {
         pendingShuffleState = nil
         pendingShuffleStateUntil = nil
 
+        pausedPlaybackValidationTask?.cancel()
+        pausedPlaybackValidationTask = nil
         stopProgressTimer()
     }
 
@@ -778,7 +791,10 @@ final class MusicManager: ObservableObject {
         activeSourceRefreshTask = Task { [weak self] in
             guard let self else { return }
 
-            let trackInfo = await self.fetchFirstPlayingTrackInfo(ignoring: ignoredBundleIdentifier)
+            let trackInfo = await self.resolvePlayingTrackInfo(
+                ignoring: ignoredBundleIdentifier,
+                fallbackPausedTrackInfo: fallbackPausedTrackInfo
+            )
 
             await MainActor.run { [weak self] in
                 guard let self else { return }
@@ -820,6 +836,75 @@ final class MusicManager: ObservableObject {
         }
 
         return nil
+    }
+
+    private func resolvePlayingTrackInfo(
+        ignoring ignoredBundleIdentifier: String,
+        fallbackPausedTrackInfo: TrackInfo?
+    ) async -> TrackInfo? {
+        if let trackInfo = await fetchFirstPlayingTrackInfo(ignoring: ignoredBundleIdentifier) {
+            return trackInfo
+        }
+
+        guard let fallbackBundleIdentifier = fallbackPausedTrackInfo?.payload.bundleIdentifier,
+              !fallbackBundleIdentifier.isEmpty else {
+            return nil
+        }
+
+        try? await Task.sleep(for: .milliseconds(180))
+        guard !Task.isCancelled else { return nil }
+
+        guard let refreshedTrackInfo = await fetchTrackInfo(for: fallbackBundleIdentifier),
+              isPayloadPlaying(refreshedTrackInfo.payload) else {
+            return nil
+        }
+
+        return refreshedTrackInfo
+    }
+
+    @MainActor
+    private func schedulePausedPlaybackValidation(bundleIdentifier: String) {
+        guard pausedPlaybackValidationTask == nil else { return }
+        guard !bundleIdentifier.isEmpty else { return }
+
+        pausedPlaybackValidationTask = Task { [weak self] in
+            for attempt in 0..<4 {
+                try? await Task.sleep(for: .milliseconds(attempt == 0 ? 450 : 800))
+                guard !Task.isCancelled, let self else { return }
+
+                let trackInfo: TrackInfo?
+                if let playingTrackInfo = await self.fetchFirstPlayingTrackInfo(ignoring: "") {
+                    trackInfo = playingTrackInfo
+                } else {
+                    trackInfo = await self.fetchTrackInfo(for: bundleIdentifier)
+                }
+
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
+                    guard !Task.isCancelled else { return }
+
+                    guard !self.isPlaying else {
+                        self.stopPausedPlaybackValidation()
+                        return
+                    }
+
+                    if let trackInfo, self.isPayloadPlaying(trackInfo.payload) {
+                        self.apply(trackInfo, allowsPausedSourceLookup: false)
+                        self.stopPausedPlaybackValidation()
+                    }
+                }
+            }
+
+            await MainActor.run { [weak self] in
+                self?.pausedPlaybackValidationTask = nil
+            }
+        }
+    }
+
+    @MainActor
+    private func stopPausedPlaybackValidation() {
+        pausedPlaybackValidationTask?.cancel()
+        pausedPlaybackValidationTask = nil
     }
 
     private func fetchTrackInfo(for bundleIdentifier: String) async -> TrackInfo? {
