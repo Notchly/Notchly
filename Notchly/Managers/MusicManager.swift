@@ -50,6 +50,7 @@ final class MusicManager: ObservableObject {
     private var progressTask: Task<Void, Never>?
     private var activeSourceRefreshTask: Task<Void, Never>?
     private var pausedPlaybackValidationTask: Task<Void, Never>?
+    private var artworkClearTask: Task<Void, Never>?
     private var startupTask: Task<Void, Never>?
     private var volumePollTimer: Timer?
     private var appTerminationObserver: NSObjectProtocol?
@@ -60,6 +61,7 @@ final class MusicManager: ObservableObject {
     private var currentPlaybackRate: Double = 0
     private var isPreviewSeeking = false
     private var currentTrackIdentity: String = ""
+    private var displayedArtworkIdentity: String = ""
     private var currentPlayerBundleIdentifier: String = ""
     private var lastAudibleOutputVolume: Double = 0.5
     private var ignoreTransientZeroProgressUntil: Date?
@@ -135,6 +137,8 @@ final class MusicManager: ObservableObject {
         activeSourceRefreshTask = nil
         pausedPlaybackValidationTask?.cancel()
         pausedPlaybackValidationTask = nil
+        artworkClearTask?.cancel()
+        artworkClearTask = nil
         volumePollTimer?.invalidate()
         volumePollTimer = nil
         mediaController.stopListening()
@@ -147,6 +151,7 @@ final class MusicManager: ObservableObject {
         progressTask?.cancel()
         activeSourceRefreshTask?.cancel()
         pausedPlaybackValidationTask?.cancel()
+        artworkClearTask?.cancel()
         volumePollTimer?.invalidate()
         if let appTerminationObserver {
             NSWorkspace.shared.notificationCenter.removeObserver(appTerminationObserver)
@@ -327,10 +332,8 @@ final class MusicManager: ObservableObject {
             currentSource = newSource
         }
 
-        if trackChanged {
-            updateArtwork(from: payload.artwork)
-        } else if payload.artwork == nil && artworkImage != nil {
-            updateArtwork(from: nil)
+        if trackChanged || payload.artwork != nil || !artworkAvailable {
+            updateArtwork(from: payload.artwork, for: newTrackIdentity)
         }
 
         syncProgressTimerState()
@@ -366,21 +369,18 @@ final class MusicManager: ObservableObject {
     }
 
     @MainActor
-    private func updateArtwork(from artwork: NSImage?) {
+    private func updateArtwork(from artwork: NSImage?, for trackIdentity: String) {
         guard let artwork else {
-            if artworkImage != nil {
-                artworkImage = nil
-            }
-            if artworkAvailable {
-                artworkAvailable = false
-            }
-            if waveformColor != .white {
-                waveformColor = .white
-            }
+            scheduleArtworkClear(for: trackIdentity)
             return
         }
 
-        artworkImage = nil
+        artworkClearTask?.cancel()
+        artworkClearTask = nil
+
+        guard displayedArtworkIdentity != trackIdentity || !artworkAvailable || artworkImage == nil else {
+            return
+        }
 
         let artworkPayload = autoreleasepool {
             let preparedArtwork = artwork.resizedForArtwork()
@@ -389,7 +389,10 @@ final class MusicManager: ObservableObject {
         }
 
         let preparedArtwork = artworkPayload.image
-        artworkImage = preparedArtwork
+        displayedArtworkIdentity = trackIdentity
+        if artworkImage !== preparedArtwork {
+            artworkImage = preparedArtwork
+        }
         if !artworkAvailable {
             artworkAvailable = true
         }
@@ -404,6 +407,49 @@ final class MusicManager: ObservableObject {
                 waveformColor = .white
             }
         }
+    }
+
+    @MainActor
+    private func scheduleArtworkClear(for trackIdentity: String) {
+        artworkClearTask?.cancel()
+
+        artworkClearTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(650))
+            guard !Task.isCancelled else { return }
+
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                guard !Task.isCancelled else { return }
+                guard self.currentTrackIdentity == trackIdentity else {
+                    self.artworkClearTask = nil
+                    return
+                }
+                guard self.displayedArtworkIdentity != trackIdentity else {
+                    self.artworkClearTask = nil
+                    return
+                }
+
+                self.clearArtworkImmediately()
+                self.artworkClearTask = nil
+            }
+        }
+    }
+
+    @MainActor
+    private func clearArtworkImmediately() {
+        artworkClearTask?.cancel()
+        artworkClearTask = nil
+
+        if artworkImage != nil {
+            artworkImage = nil
+        }
+        if artworkAvailable {
+            artworkAvailable = false
+        }
+        if waveformColor != .white {
+            waveformColor = .white
+        }
+        displayedArtworkIdentity = ""
     }
 
     @MainActor
@@ -723,20 +769,13 @@ final class MusicManager: ObservableObject {
         if currentSource != .none {
             currentSource = .none
         }
-        if artworkAvailable {
-            artworkAvailable = false
-        }
-        if artworkImage != nil {
-            artworkImage = nil
-        }
-        if waveformColor != .white {
-            waveformColor = .white
-        }
+        clearArtworkImmediately()
         basePlaybackPosition = 0
         baseSyncDate = nil
         currentPlaybackRate = 0
         isPreviewSeeking = false
         currentTrackIdentity = ""
+        displayedArtworkIdentity = ""
         currentPlayerBundleIdentifier = ""
         if isShuffleEnabled {
             isShuffleEnabled = false
