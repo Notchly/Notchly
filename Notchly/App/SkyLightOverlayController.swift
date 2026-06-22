@@ -18,12 +18,14 @@ final class SkyLightOverlayController {
     private var screenChangeObserver: NSObjectProtocol?
     private var screenRefreshTask: Task<Void, Never>?
     private var lockScreenWindowCloseTask: Task<Void, Never>?
+    private var fullscreenRefreshTask: Task<Void, Never>?
     private var currentScreenID: CGDirectDisplayID?
     private var currentScreen: NSScreen?
     private var displayTargetCancellable: AnyCancellable?
     private var hideWhenFullscreenCancellable: AnyCancellable?
     private var lockStateCancellable: AnyCancellable?
-    private var fullscreenDetectionTask: Task<Void, Never>?
+    private var workspaceActivationObserver: NSObjectProtocol?
+    private var activeSpaceObserver: NSObjectProtocol?
     private var isIslandHiddenForFullscreen = false
 
     init(environment: AppEnvironment) {
@@ -41,8 +43,8 @@ final class SkyLightOverlayController {
         screenRefreshTask = nil
         lockScreenWindowCloseTask?.cancel()
         lockScreenWindowCloseTask = nil
-        fullscreenDetectionTask?.cancel()
-        fullscreenDetectionTask = nil
+        fullscreenRefreshTask?.cancel()
+        fullscreenRefreshTask = nil
         displayTargetCancellable?.cancel()
         displayTargetCancellable = nil
         hideWhenFullscreenCancellable?.cancel()
@@ -54,6 +56,16 @@ final class SkyLightOverlayController {
         if let screenChangeObserver {
             NotificationCenter.default.removeObserver(screenChangeObserver)
             self.screenChangeObserver = nil
+        }
+
+        if let workspaceActivationObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(workspaceActivationObserver)
+            self.workspaceActivationObserver = nil
+        }
+
+        if let activeSpaceObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(activeSpaceObserver)
+            self.activeSpaceObserver = nil
         }
 
         islandWindowController?.close()
@@ -222,8 +234,9 @@ final class SkyLightOverlayController {
             environment.lockScreenOverlayModel.state == .music
 
         guard shouldMonitor else {
-            fullscreenDetectionTask?.cancel()
-            fullscreenDetectionTask = nil
+            fullscreenRefreshTask?.cancel()
+            fullscreenRefreshTask = nil
+            uninstallFullscreenObservers()
 
             if let screen = currentScreen ?? targetScreen() {
                 setIslandHiddenForFullscreen(false, on: screen)
@@ -231,16 +244,8 @@ final class SkyLightOverlayController {
             return
         }
 
-        if fullscreenDetectionTask == nil {
-            fullscreenDetectionTask = Task { @MainActor [weak self] in
-                while !Task.isCancelled {
-                    self?.evaluateFullscreenVisibility()
-                    try? await Task.sleep(for: .milliseconds(650))
-                }
-            }
-        }
-
-        evaluateFullscreenVisibility()
+        installFullscreenObserversIfNeeded()
+        scheduleFullscreenVisibilityRefresh()
     }
 
     private func evaluateFullscreenVisibility() {
@@ -251,6 +256,62 @@ final class SkyLightOverlayController {
         }
 
         setIslandHiddenForFullscreen(isFullscreenAppActive(on: screen), on: screen)
+    }
+
+    private func installFullscreenObserversIfNeeded() {
+        let workspaceCenter = NSWorkspace.shared.notificationCenter
+
+        if workspaceActivationObserver == nil {
+            workspaceActivationObserver = workspaceCenter.addObserver(
+                forName: NSWorkspace.didActivateApplicationNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.scheduleFullscreenVisibilityRefresh()
+                }
+            }
+        }
+
+        if activeSpaceObserver == nil {
+            activeSpaceObserver = workspaceCenter.addObserver(
+                forName: NSWorkspace.activeSpaceDidChangeNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.scheduleFullscreenVisibilityRefresh()
+                }
+            }
+        }
+    }
+
+    private func uninstallFullscreenObservers() {
+        let workspaceCenter = NSWorkspace.shared.notificationCenter
+
+        if let workspaceActivationObserver {
+            workspaceCenter.removeObserver(workspaceActivationObserver)
+            self.workspaceActivationObserver = nil
+        }
+
+        if let activeSpaceObserver {
+            workspaceCenter.removeObserver(activeSpaceObserver)
+            self.activeSpaceObserver = nil
+        }
+    }
+
+    private func scheduleFullscreenVisibilityRefresh() {
+        fullscreenRefreshTask?.cancel()
+
+        // Debounce expensive CGWindowList queries so the overlay only reevaluates
+        // fullscreen visibility when macOS app/space state actually changes.
+        fullscreenRefreshTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(120))
+            guard !Task.isCancelled else { return }
+
+            self?.evaluateFullscreenVisibility()
+            self?.fullscreenRefreshTask = nil
+        }
     }
 
     private func setIslandHiddenForFullscreen(_ hidden: Bool, on screen: NSScreen) {
