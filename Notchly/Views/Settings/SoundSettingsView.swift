@@ -2,7 +2,7 @@
 //  SoundSettingsView.swift
 //  Notchly
 //
-//  Created by user on 26.05.2026.
+//  Created by n0xbyte on 26.05.2026.
 //
 
 import SwiftUI

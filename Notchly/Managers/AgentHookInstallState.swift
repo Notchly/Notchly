@@ -2,7 +2,7 @@
 //  AgentHookInstallState.swift
 //  Notchly
 //
-//  Created by user on 03.06.2026.
+//  Created by n0xbyte on 03.06.2026.
 //
 
 enum AgentHookInstallState {

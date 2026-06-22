@@ -2,7 +2,7 @@
 //  IslandWidthResolver.swift
 //  Notchly
 //
-//  Created by user on 31.05.2026.
+//  Created by n0xbyte on 31.05.2026.
 //
 
 import AppKit

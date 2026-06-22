@@ -2,7 +2,7 @@
 //  NSImage+AverageColor.swift
 //  DynamicIsland
 //
-//  Created by user on 19.03.2026.
+//  Created by n0xbyte on 19.03.2026.
 //
 
 import AppKit

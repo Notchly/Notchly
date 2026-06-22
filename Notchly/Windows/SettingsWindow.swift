@@ -2,7 +2,7 @@
 //  SettingsWindow.swift
 //  Notchly
 //
-//  Created by user on 16.03.2026.
+//  Created by n0xbyte on 16.03.2026.
 //
 
 import SwiftUI
@@ -62,7 +62,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         window.backgroundColor = .clear
         window.isOpaque = false
         window.hasShadow = true
-        window.isMovableByWindowBackground = true
+        window.isMovableByWindowBackground = false
 
         window.standardWindowButton(.miniaturizeButton)?.isEnabled = false
         window.standardWindowButton(.zoomButton)?.isEnabled = false

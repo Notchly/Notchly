@@ -2,7 +2,7 @@
 //  SettingsView.swift
 //  Notchly
 //
-//  Created by user on 16.03.2026.
+//  Created by n0xbyte on 16.03.2026.
 //
 
 import SwiftUI
@@ -147,7 +147,12 @@ struct SettingsView: View {
         .padding(.top, 0)
         .padding(.bottom, 14)
         .frame(height: 70, alignment: .center)
-        .background(.black.opacity(0.06))
+        .background {
+            ZStack {
+                WindowDragHandle()
+                Color.black.opacity(0.06)
+            }
+        }
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(.white.opacity(0.07))

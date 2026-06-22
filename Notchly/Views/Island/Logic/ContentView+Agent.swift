@@ -2,7 +2,7 @@
 //  ContentView+Agent.swift
 //  Notchly
 //
-//  Created by user on 29.05.2026.
+//  Created by n0xbyte on 29.05.2026.
 //
 
 import SwiftUI

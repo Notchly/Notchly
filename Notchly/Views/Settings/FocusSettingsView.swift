@@ -2,7 +2,7 @@
 //  FocusSettingsView.swift
 //  Notchly
 //
-//  Created by user on 23.05.2026.
+//  Created by n0xbyte on 23.05.2026.
 //
 
 import SwiftUI

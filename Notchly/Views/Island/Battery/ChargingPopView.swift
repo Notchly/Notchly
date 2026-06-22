@@ -2,7 +2,7 @@
 //  ChargingPopView.swift
 //  Notchly
 //
-//  Created by user on 25.03.2026.
+//  Created by n0xbyte on 25.03.2026.
 //
 
 import SwiftUI

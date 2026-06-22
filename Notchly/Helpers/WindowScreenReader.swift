@@ -2,7 +2,7 @@
 //  WindowScreenReader.swift
 //  Notchly
 //
-//  Created by user on 20.04.2026.
+//  Created by n0xbyte on 20.04.2026.
 //
 
 import SwiftUI

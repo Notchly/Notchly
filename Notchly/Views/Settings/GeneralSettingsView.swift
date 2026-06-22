@@ -2,7 +2,7 @@
 //  GeneralSettingsView.swift
 //  Notchly
 //
-//  Created by user on 01.04.2026.
+//  Created by n0xbyte on 01.04.2026.
 //
 
 import SwiftUI

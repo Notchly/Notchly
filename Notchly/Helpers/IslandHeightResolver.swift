@@ -2,7 +2,7 @@
 //  IslandHeightResolver.swift
 //  Notchly
 //
-//  Created by user on 27.04.2026.
+//  Created by n0xbyte on 27.04.2026.
 //
 
 import AppKit

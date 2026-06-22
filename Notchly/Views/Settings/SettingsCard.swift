@@ -2,7 +2,7 @@
 //  SettingsCard.swift
 //  Notchly
 //
-//  Created by user on 17.03.2026.
+//  Created by n0xbyte on 17.03.2026.
 //
 
 import SwiftUI

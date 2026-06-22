@@ -2,7 +2,7 @@
 //  BatteryManager.swift
 //  Notchly
 //
-//  Created by user on 16.03.2026.
+//  Created by n0xbyte on 16.03.2026.
 //
 
 import Foundation
