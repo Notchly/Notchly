@@ -105,6 +105,58 @@ extension ContentView {
         }
     }
 
+    func handleMusicVisibilityChange(_ isEnabled: Bool) {
+        dynamicManager.updateCurrentModule()
+
+        autoExpandMusicTask?.cancel()
+        autoExpandMusicTask = nil
+        previewAutoCloseKey = ""
+        stagedMusicAutoOpenKey = ""
+        showMusicVolumeControl = false
+
+        if focusReturnStatus == .opened || focusReturnStatus == .musicPreview {
+            focusReturnStatus = .closed
+        }
+
+        if brightnessReturnStatus == .opened || brightnessReturnStatus == .musicPreview {
+            brightnessReturnStatus = .closed
+        }
+
+        if volumeReturnStatus == .opened || volumeReturnStatus == .musicPreview {
+            volumeReturnStatus = .closed
+        }
+
+        if agentMusicReturnStatus == .opened || agentMusicReturnStatus == .musicPreview {
+            agentMusicReturnStatus = .closed
+        }
+
+        if !isEnabled {
+            musicStartWidthTask?.cancel()
+            musicStartWidthTask = nil
+            musicStartUsesIdleWidth = false
+            musicEndWidthTask?.cancel()
+            musicEndWidthTask = nil
+
+            if status == .opened || status == .musicPreview {
+                withAnimation(animation) {
+                    status = .closed
+                }
+            } else {
+                beginMusicEndWidthTransitionIfNeeded()
+            }
+
+            return
+        }
+
+        guard musicManager.hasNowPlayingContent else { return }
+
+        handleNowPlayingContentChange(true)
+
+        guard musicManager.isPlaying else { return }
+
+        handleMusicAutoExpand(isPlaying: true)
+    }
+
     func handleChargingChange(_ newValue: Bool) {
         guard !isAgentAlertBlockingOtherEvents else {
             showChargingPop = false

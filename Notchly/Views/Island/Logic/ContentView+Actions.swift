@@ -138,6 +138,12 @@ extension ContentView {
                 beginStandaloneAgentPresentation()
             }
         } else {
+            if displayedAgentEvent == nil && !isAgentMusicTransitionActive &&
+                (status == .agentPreview || status == .agentCollapse) {
+                withAnimation(animation) {
+                    status = .closed
+                }
+            }
             dismissAgentPresentationAfterMinimumDelay()
         }
     }

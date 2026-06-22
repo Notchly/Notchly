@@ -168,6 +168,9 @@ struct ContentView: View {
         .onChange(of: settingsManager.showBattery) { _, isEnabled in
             handleBatteryVisibilityChange(isEnabled)
         }
+        .onChange(of: settingsManager.showMusic) { _, isEnabled in
+            handleMusicVisibilityChange(isEnabled)
+        }
     }
 
     private var islandViewWithAnimations: some View {

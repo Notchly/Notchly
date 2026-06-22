@@ -24,6 +24,8 @@ extension ContentView {
 
     var activeModuleView: some View {
         Group {
+            let hasActiveAgentEvent = activeAgentEvent != nil
+
             if isAgentMusicTransitionActive {
                 musicContainer
             } else if isStandaloneAgentPresentationActive {
@@ -33,7 +35,7 @@ extension ContentView {
                       settingsManager.showMusic,
                       musicManager.hasNowPlayingContent {
                 musicContainer
-            } else if dynamicManager.currentModule == .agent {
+            } else if dynamicManager.currentModule == .agent, hasActiveAgentEvent {
                 agentContainer
             } else if status == .focusCollapse ||
                 status == .focusPreview ||
@@ -146,7 +148,7 @@ extension ContentView {
         guard !showChargingPop else { return false }
         guard !musicEndKeepsFullWidth else { return false }
         guard !musicStartUsesIdleWidth else { return true }
-        guard !musicManager.hasNowPlayingContent else { return false }
+        guard !(settingsManager.showMusic && musicManager.hasNowPlayingContent) else { return false }
 
         return dynamicManager.currentModule == .none || dynamicManager.currentModule == .battery
     }

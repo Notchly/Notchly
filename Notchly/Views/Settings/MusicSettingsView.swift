@@ -15,8 +15,8 @@ struct MusicSettingsView: View {
             SettingsCard {
                 VStack(spacing: 0) {
                     SettingsToggleRow(
-                        title: "Music Preview",
-                        subtitle: "Show the currently playing track around the notch.",
+                        title: "Show Music",
+                        subtitle: "Show the currently playing track around the notch and allow music previews.",
                         isOn: $settingsManager.showMusic
                     )
 
