@@ -10,6 +10,13 @@ import SwiftUI
 struct BrightnessSettingsView: View {
     @ObservedObject var settingsManager: SettingsManager
 
+    private var displayStyleBinding: Binding<StatusDisplayStyle> {
+        Binding(
+            get: { settingsManager.brightnessDisplayStyle },
+            set: { settingsManager.brightnessDisplayStyle = $0 }
+        )
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
             SettingsCard {
@@ -22,11 +29,13 @@ struct BrightnessSettingsView: View {
 
                     SettingsDivider()
 
-                    SettingsToggleRow(
-                        title: "Brightness Line",
-                        subtitle: "Show the brightness progress line next to the percentage.",
-                        isOn: $settingsManager.showBrightnessLine
+                    SettingsDisplayStylePicker(
+                        title: "Display Style",
+                        subtitle: "Choose either a compact line or a numeric percentage.",
+                        selection: displayStyleBinding
                     )
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
                     .disabled(!settingsManager.showBrightnessStatus)
                     .opacity(settingsManager.showBrightnessStatus ? 1 : 0.45)
 
@@ -56,21 +65,11 @@ struct BrightnessSettingsView: View {
                             in: 20...40,
                             step: 2
                         )
-                        .disabled(!settingsManager.showBrightnessStatus || !settingsManager.showBrightnessLine)
-                        .opacity(settingsManager.showBrightnessStatus && settingsManager.showBrightnessLine ? 1 : 0.45)
+                        .disabled(!settingsManager.showBrightnessStatus || settingsManager.brightnessDisplayStyle != .line)
+                        .opacity(settingsManager.showBrightnessStatus && settingsManager.brightnessDisplayStyle == .line ? 1 : 0.45)
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 12)
-
-                    SettingsDivider()
-
-                    SettingsToggleRow(
-                        title: "Show Percent",
-                        subtitle: "Show the numeric brightness value on the right.",
-                        isOn: $settingsManager.showBrightnessPercent
-                    )
-                    .disabled(!settingsManager.showBrightnessStatus)
-                    .opacity(settingsManager.showBrightnessStatus ? 1 : 0.45)
                 }
             }
         }

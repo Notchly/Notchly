@@ -10,6 +10,13 @@ import SwiftUI
 struct SoundSettingsView: View {
     @ObservedObject var settingsManager: SettingsManager
 
+    private var displayStyleBinding: Binding<StatusDisplayStyle> {
+        Binding(
+            get: { settingsManager.soundDisplayStyle },
+            set: { settingsManager.soundDisplayStyle = $0 }
+        )
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
             SettingsCard {
@@ -22,11 +29,13 @@ struct SoundSettingsView: View {
 
                     SettingsDivider()
 
-                    SettingsToggleRow(
-                        title: "Sound Line",
-                        subtitle: "Show the volume progress line next to the percentage.",
-                        isOn: $settingsManager.showSoundLine
+                    SettingsDisplayStylePicker(
+                        title: "Display Style",
+                        subtitle: "Choose either a compact line or a numeric percentage.",
+                        selection: displayStyleBinding
                     )
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
                     .disabled(!settingsManager.showSoundStatus)
                     .opacity(settingsManager.showSoundStatus ? 1 : 0.45)
 
@@ -56,21 +65,11 @@ struct SoundSettingsView: View {
                             in: 20...40,
                             step: 2
                         )
-                        .disabled(!settingsManager.showSoundStatus || !settingsManager.showSoundLine)
-                        .opacity(settingsManager.showSoundStatus && settingsManager.showSoundLine ? 1 : 0.45)
+                        .disabled(!settingsManager.showSoundStatus || settingsManager.soundDisplayStyle != .line)
+                        .opacity(settingsManager.showSoundStatus && settingsManager.soundDisplayStyle == .line ? 1 : 0.45)
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 12)
-
-                    SettingsDivider()
-
-                    SettingsToggleRow(
-                        title: "Show Percent",
-                        subtitle: "Show the numeric volume value on the right.",
-                        isOn: $settingsManager.showSoundPercent
-                    )
-                    .disabled(!settingsManager.showSoundStatus)
-                    .opacity(settingsManager.showSoundStatus ? 1 : 0.45)
                 }
             }
         }

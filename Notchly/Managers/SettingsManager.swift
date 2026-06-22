@@ -41,6 +41,22 @@ enum DisplayTarget: String, CaseIterable {
     }
 }
 
+enum StatusDisplayStyle: String, CaseIterable, Identifiable {
+    case line
+    case percent
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .line:
+            return "Line"
+        case .percent:
+            return "Percent"
+        }
+    }
+}
+
 @MainActor
 final class SettingsManager: ObservableObject {
     private enum Defaults {
@@ -61,11 +77,11 @@ final class SettingsManager: ObservableObject {
         static let showBrightnessStatus = true
         static let showBrightnessLine = true
         static let brightnessLineWidth = 36.0
-        static let showBrightnessPercent = true
+        static let showBrightnessPercent = false
         static let showSoundStatus = true
         static let showSoundLine = true
         static let soundLineWidth = 36.0
-        static let showSoundPercent = true
+        static let showSoundPercent = false
         static let enableCodexApprovalAlertSound = false
         static let enableCodexCompletedAlertSound = false
         static let codexCompletedAlertDuration = 2.2
@@ -162,6 +178,34 @@ final class SettingsManager: ObservableObject {
         didSet { UserDefaults.standard.set(showSoundPercent, forKey: "showSoundPercent") }
     }
 
+    var brightnessDisplayStyle: StatusDisplayStyle {
+        get { showBrightnessLine ? .line : .percent }
+        set {
+            switch newValue {
+            case .line:
+                showBrightnessLine = true
+                showBrightnessPercent = false
+            case .percent:
+                showBrightnessLine = false
+                showBrightnessPercent = true
+            }
+        }
+    }
+
+    var soundDisplayStyle: StatusDisplayStyle {
+        get { showSoundLine ? .line : .percent }
+        set {
+            switch newValue {
+            case .line:
+                showSoundLine = true
+                showSoundPercent = false
+            case .percent:
+                showSoundLine = false
+                showSoundPercent = true
+            }
+        }
+    }
+
     @Published var enableCodexApprovalAlertSound: Bool {
         didSet { UserDefaults.standard.set(enableCodexApprovalAlertSound, forKey: "enableCodexApprovalAlertSound") }
     }
@@ -204,6 +248,8 @@ final class SettingsManager: ObservableObject {
         self.enableCodexApprovalAlertSound = UserDefaults.standard.object(forKey: "enableCodexApprovalAlertSound") as? Bool ?? legacyCodexAlertSound ?? Defaults.enableCodexApprovalAlertSound
         self.enableCodexCompletedAlertSound = UserDefaults.standard.object(forKey: "enableCodexCompletedAlertSound") as? Bool ?? legacyCodexAlertSound ?? Defaults.enableCodexCompletedAlertSound
         self.codexCompletedAlertDuration = UserDefaults.standard.object(forKey: "codexCompletedAlertDuration") as? Double ?? Defaults.codexCompletedAlertDuration
+
+        normalizeStatusDisplayModes()
     }
 
     func refreshLaunchAtLoginStatus() {
@@ -254,6 +300,18 @@ final class SettingsManager: ObservableObject {
         enableCodexApprovalAlertSound = Defaults.enableCodexApprovalAlertSound
         enableCodexCompletedAlertSound = Defaults.enableCodexCompletedAlertSound
         codexCompletedAlertDuration = Defaults.codexCompletedAlertDuration
+    }
+
+    private func normalizeStatusDisplayModes() {
+        if showBrightnessLine == showBrightnessPercent {
+            showBrightnessLine = Defaults.showBrightnessLine
+            showBrightnessPercent = Defaults.showBrightnessPercent
+        }
+
+        if showSoundLine == showSoundPercent {
+            showSoundLine = Defaults.showSoundLine
+            showSoundPercent = Defaults.showSoundPercent
+        }
     }
 
     private func applyLaunchAtLogin(_ enabled: Bool) {

@@ -476,6 +476,8 @@ private struct BrightnessStatusView: View {
         Int((clampedBrightness * 100).rounded())
     }
 
+    private let contentVerticalOffset: CGFloat = 1.5
+
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: brightnessSymbolName)
@@ -504,9 +506,7 @@ private struct BrightnessStatusView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                     .frame(width: lineWidth, height: 20)
-                }
-
-                if showsPercent {
+                } else if showsPercent {
                     Text("\(percentage)")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.9))
@@ -517,6 +517,7 @@ private struct BrightnessStatusView: View {
         }
         .padding(.horizontal, 12)
         .frame(width: size.width, height: size.height)
+        .offset(y: contentVerticalOffset)
     }
 
     private var brightnessSymbolName: String {
@@ -547,6 +548,8 @@ private struct VolumeStatusView: View {
         Int((clampedVolume * 100).rounded())
     }
 
+    private let contentVerticalOffset: CGFloat = 1.5
+
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: volumeSymbolName)
@@ -575,9 +578,7 @@ private struct VolumeStatusView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                     .frame(width: lineWidth, height: 20)
-                }
-
-                if showsPercent {
+                } else if showsPercent {
                     Text("\(percentage)")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.9))
@@ -588,6 +589,7 @@ private struct VolumeStatusView: View {
         }
         .padding(.horizontal, 12)
         .frame(width: size.width, height: size.height)
+        .offset(y: contentVerticalOffset)
     }
 
     private var volumeSymbolName: String {
