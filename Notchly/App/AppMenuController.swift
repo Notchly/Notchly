@@ -39,6 +39,7 @@ final class AppMenuController: NSObject {
         }
 
         item.menu = makeMenu()
+        startUpdaterIfNeeded()
     }
 
     private func makeMenu() -> NSMenu {

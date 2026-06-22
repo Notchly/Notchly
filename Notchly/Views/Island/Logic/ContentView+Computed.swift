@@ -150,7 +150,7 @@ extension ContentView {
         guard !musicStartUsesIdleWidth else { return true }
         guard !(settingsManager.showMusic && musicManager.hasNowPlayingContent) else { return false }
 
-        return dynamicManager.currentModule == .none || dynamicManager.currentModule == .battery
+        return dynamicManager.currentModule == .none
     }
 
     var idleNotchSize: CGSize {
