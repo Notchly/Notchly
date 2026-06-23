@@ -27,6 +27,15 @@ extension ContentView {
         agentDismissTask?.cancel()
         agentDismissTask = nil
         agentPresentationStartedAt = nil
+        agentPresentationTask?.cancel()
+        agentPresentationTask = nil
+        showsStandaloneAgentContent = false
+        isStandaloneAgentClosing = false
+        showsAgentMusicContent = false
+        agentMusicContentAppeared = false
+        hidesMusicContentDuringAgentReturn = false
+        isAgentMusicClosing = false
+        idleNotchSizeSuppressed = false
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
             hasFinishedInitialAppear = true
@@ -129,7 +138,11 @@ extension ContentView {
         if let event {
             agentDismissTask?.cancel()
             agentDismissTask = nil
+            agentPresentationTask?.cancel()
+            agentPresentationTask = nil
             agentMusicHideTask?.cancel()
+            showsStandaloneAgentContent = false
+            isStandaloneAgentClosing = false
             displayedAgentEvent = event
             agentPresentationStartedAt = Date()
             if canShowAgentOverMusic {
@@ -202,36 +215,96 @@ extension ContentView {
         showMusicVolumeControl = false
         isAgentMusicTransitionActive = false
         showsAgentMusicContent = false
+        agentMusicContentAppeared = false
         hidesMusicContentDuringAgentReturn = false
+        isAgentMusicClosing = false
 
-        guard status != .agentPreview else { return }
+        let baseExpandDuration = 0.3
+        let expandDuration = 0.42
+        let contentDelay = 0.08
+        let contentDuration = 0.28
 
-        withAnimation(.smooth(duration: 0.42, extraBounce: 0)) {
-            status = .agentPreview
+        withAnimation(.smooth(duration: baseExpandDuration, extraBounce: 0)) {
+            showsStandaloneAgentContent = false
+            isStandaloneAgentClosing = false
+            idleNotchSizeSuppressed = true
+            status = .closed
+        }
+
+        agentPresentationTask?.cancel()
+        agentPresentationTask = Task {
+            try? await Task.sleep(for: .seconds(baseExpandDuration))
+            guard !Task.isCancelled else { return }
+
+            await MainActor.run {
+                guard activeAgentEvent != nil else { return }
+                guard status == .closed else { return }
+
+                withAnimation(.smooth(duration: expandDuration, extraBounce: 0)) {
+                    status = .agentPreview
+                }
+            }
+
+            try? await Task.sleep(for: .seconds(contentDelay))
+            guard !Task.isCancelled else { return }
+
+            await MainActor.run {
+                guard activeAgentEvent != nil else { return }
+                guard status == .agentPreview else { return }
+
+                withAnimation(.smooth(duration: contentDuration, extraBounce: 0)) {
+                    showsStandaloneAgentContent = true
+                }
+
+                agentPresentationTask = nil
+            }
         }
     }
 
     func hideStandaloneAgentPresentationIfNeeded() {
         guard !isAgentMusicTransitionActive else { return }
-        guard status == .agentPreview || status == .agentCollapse else {
-            displayedAgentEvent = nil
-            agentPresentationStartedAt = nil
+        guard status == .agentPreview || status == .agentCollapse || status == .closed else {
+            withAnimation(.smooth(duration: 0.3, extraBounce: 0)) {
+                idleNotchSizeSuppressed = false
+                showsStandaloneAgentContent = false
+                isStandaloneAgentClosing = false
+                displayedAgentEvent = nil
+                agentPresentationStartedAt = nil
+            }
             return
         }
 
-        let closeDuration = 0.34
+        let returnDuration = 0.5
+        let idleReturnDuration = 0.42
 
-        withAnimation(.smooth(duration: closeDuration, extraBounce: 0)) {
+        withAnimation(animation) {
+            isStandaloneAgentClosing = true
+            idleNotchSizeSuppressed = true
             status = .closed
         }
 
         agentDismissTask?.cancel()
         agentDismissTask = Task {
-            try? await Task.sleep(for: .seconds(closeDuration))
+            try? await Task.sleep(for: .seconds(returnDuration))
             guard !Task.isCancelled else { return }
 
             await MainActor.run {
                 guard agentEventManager.currentEvent == nil else { return }
+                guard status == .closed else { return }
+
+                showsStandaloneAgentContent = false
+
+                withAnimation(animation) {
+                    idleNotchSizeSuppressed = false
+                }
+            }
+
+            try? await Task.sleep(for: .seconds(idleReturnDuration))
+            guard !Task.isCancelled else { return }
+
+            await MainActor.run {
+                guard agentEventManager.currentEvent == nil else { return }
+                isStandaloneAgentClosing = false
                 displayedAgentEvent = nil
                 agentPresentationStartedAt = nil
                 agentDismissTask = nil
@@ -253,32 +326,25 @@ extension ContentView {
         }
 
         isAgentMusicTransitionActive = true
+        isAgentMusicClosing = false
         agentCollapseShowsMusic = false
-        showsAgentMusicContent = false
+        showsAgentMusicContent = true
+        agentMusicContentAppeared = false
 
-        let collapseDuration = 0.34
-
-        withAnimation(.smooth(duration: collapseDuration, extraBounce: 0)) {
-            status = .agentCollapse
+        withAnimation(animation) {
+            status = .agentPreview
         }
 
         Task {
-            try? await Task.sleep(for: .seconds(collapseDuration))
+            try? await Task.sleep(for: .milliseconds(90))
             guard !Task.isCancelled else { return }
 
             await MainActor.run {
                 guard isAgentMusicTransitionActive else { return }
+                guard !isAgentMusicClosing else { return }
                 guard agentEventManager.currentEvent != nil || displayedAgentEvent != nil else { return }
 
-                agentCollapseShowsMusic = false
-
-                withAnimation(.smooth(duration: 0.42, extraBounce: 0)) {
-                    status = .agentPreview
-                }
-
-                withAnimation(.smooth(duration: 0.3, extraBounce: 0).delay(0.08)) {
-                    showsAgentMusicContent = true
-                }
+                agentMusicContentAppeared = true
             }
         }
     }
@@ -288,64 +354,50 @@ extension ContentView {
             displayedAgentEvent = nil
             agentPresentationStartedAt = nil
             showsAgentMusicContent = false
+            agentMusicContentAppeared = false
             hidesMusicContentDuringAgentReturn = false
+            isAgentMusicClosing = false
             return
         }
 
         agentMusicHideTask?.cancel()
 
-        let collapseDuration = 0.34
-
-        withAnimation(.smooth(duration: 0.22, extraBounce: 0)) {
-            showsAgentMusicContent = false
-        }
-
-        agentMusicHideTask = Task {
-            try? await Task.sleep(for: .milliseconds(220))
-            guard !Task.isCancelled else { return }
-
-            await MainActor.run {
-                guard agentEventManager.currentEvent == nil else { return }
-                guard isAgentMusicTransitionActive else { return }
-
-                agentCollapseShowsMusic = false
-
-                withAnimation(.smooth(duration: collapseDuration, extraBounce: 0)) {
-                    status = .agentCollapse
-                }
-            }
-
-            try? await Task.sleep(for: .seconds(collapseDuration))
-            guard !Task.isCancelled else { return }
-
-            await MainActor.run {
-                guard agentEventManager.currentEvent == nil else { return }
-                agentCollapseShowsMusic = false
-                finishAgentMusicTransitionIfNeeded()
-            }
-        }
+        finishAgentMusicTransitionIfNeeded()
     }
 
     func finishAgentMusicTransitionIfNeeded() {
         guard isAgentMusicTransitionActive else { return }
 
         let targetStatus = resolvedAgentMusicReturnStatus()
-        let returnDuration = 0.52
+        let returnDuration = 0.5
 
-        hidesMusicContentDuringAgentReturn = true
-        showsAgentMusicContent = false
-        displayedAgentEvent = nil
-        agentPresentationStartedAt = nil
+        hidesMusicContentDuringAgentReturn = false
+        showsAgentMusicContent = true
+        agentMusicContentAppeared = true
+        isAgentMusicClosing = true
 
         guard settingsManager.showMusic,
               musicManager.hasNowPlayingContent else {
-            withAnimation(.smooth(duration: returnDuration, extraBounce: 0)) {
+            withAnimation(animation) {
                 status = .closed
             }
 
             agentMusicHideTask?.cancel()
             agentMusicHideTask = Task {
                 try? await Task.sleep(for: .seconds(returnDuration))
+                guard !Task.isCancelled else { return }
+
+                await MainActor.run {
+                    // Drop the notification layer before music content is allowed to render again.
+                    hidesMusicContentDuringAgentReturn = true
+                    showsAgentMusicContent = false
+                    agentMusicContentAppeared = false
+                    isAgentMusicClosing = false
+                    displayedAgentEvent = nil
+                    agentPresentationStartedAt = nil
+                }
+
+                try? await Task.sleep(for: .milliseconds(50))
                 guard !Task.isCancelled else { return }
 
                 await MainActor.run {
@@ -357,7 +409,7 @@ extension ContentView {
             return
         }
 
-        withAnimation(.smooth(duration: returnDuration, extraBounce: 0)) {
+        withAnimation(animation) {
             status = targetStatus
         }
 
@@ -367,18 +419,29 @@ extension ContentView {
 
         agentMusicHideTask?.cancel()
         agentMusicHideTask = Task {
-            try? await Task.sleep(for: .seconds(returnDuration * 0.82))
+            try? await Task.sleep(for: .seconds(returnDuration))
+            guard !Task.isCancelled else { return }
+
+            await MainActor.run {
+                guard agentEventManager.currentEvent == nil else { return }
+
+                // Drop the notification layer before music content is allowed to render again.
+                hidesMusicContentDuringAgentReturn = true
+                showsAgentMusicContent = false
+                agentMusicContentAppeared = false
+                isAgentMusicClosing = false
+                displayedAgentEvent = nil
+                agentPresentationStartedAt = nil
+            }
+
+            try? await Task.sleep(for: .milliseconds(50))
             guard !Task.isCancelled else { return }
 
             await MainActor.run {
                 guard agentEventManager.currentEvent == nil else { return }
 
                 isAgentMusicTransitionActive = false
-
-                withAnimation(.smooth(duration: 0.18, extraBounce: 0)) {
-                    hidesMusicContentDuringAgentReturn = false
-                }
-
+                hidesMusicContentDuringAgentReturn = false
                 agentMusicHideTask = nil
             }
         }
@@ -462,6 +525,17 @@ extension ContentView {
         default:
             return false
         }
+    }
+
+    func agentPresentationContentKey(for event: AgentEvent?) -> String {
+        guard let event else { return "agent-empty" }
+
+        return [
+            event.source.lowercased(),
+            event.kind.rawValue,
+            event.title,
+            event.message ?? ""
+        ].joined(separator: "|")
     }
 
     func scheduleAutoClose(after seconds: Double = 2.0) {

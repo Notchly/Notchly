@@ -8,6 +8,7 @@
 import SwiftUI
 
 extension ContentView {
+    @ViewBuilder
     var musicContainer: some View {
         let isWaveformActive = animationsEnabled && musicManager.isPlaying
         let clippedWidth = max(0, layout.islandSize.width + layout.cornerRadius * 2)
@@ -18,15 +19,39 @@ extension ContentView {
         let showsAgentActivity =
             hasPendingAgentEvent &&
             isAgentMusicTransitionActive &&
-            status == .agentPreview
-        
-        return IslandContainerView(
-            size: layout.islandSize,
-            cornerRadius: layout.cornerRadius,
-            spacing: layout.spacing,
-            shadowOpacity: status == .opened || status == .popping ? 0.2 : 0,
-            showsTopCornerCutouts: !hasPendingAgentEvent
-        ) {
+            (status == .agentPreview || isAgentMusicClosing)
+
+        Group {
+            if hasPendingAgentEvent {
+                AgentIslandFrame(
+                    size: layout.islandSize,
+                    cornerRadius: layout.cornerRadius,
+                    spacing: layout.spacing,
+                    isHovered: isHovered
+                ) {
+                    ZStack(alignment: .top) {
+                        if showsAgentActivity && showsAgentMusicContent {
+                            AgentActivityView(
+                                event: agentEvent,
+                                size: layout.musicPreviewSize
+                            )
+                            .id(agentPresentationContentKey(for: agentEvent))
+                            .offset(y: isAgentMusicClosing || agentMusicContentAppeared ? 10 : 4)
+                            .animation(
+                                isAgentMusicClosing ? nil : .smooth(duration: 0.24, extraBounce: 0),
+                                value: agentMusicContentAppeared
+                            )
+                        }
+                    }
+                    .frame(width: layout.musicPreviewSize.width + layout.cornerRadius * 2, height: layout.musicPreviewSize.height)
+                }
+            } else {
+                IslandContainerView(
+                    size: layout.islandSize,
+                    cornerRadius: layout.cornerRadius,
+                    spacing: layout.spacing,
+                    shadowOpacity: status == .opened || status == .popping ? 0.2 : 0
+                ) {
             if !hidesMusicContentDuringAgentReturn && !hasPendingAgentEvent && (status == .closed ||
                 status == .popping ||
                 (status == .focusCollapse && focusCollapseShowsMusic && !hidesFocusStatusContentDuringReturn) ||
@@ -60,23 +85,6 @@ extension ContentView {
                 .animation(.smooth(duration: 0.3, extraBounce: 0), value: showsAgentMusicContent)
                 .transition(.opacity.combined(with: .offset(y: 6)))
                 .zIndex(2)
-            }
-
-            if showsAgentActivity {
-                AgentActivityView(
-                    event: agentEvent,
-                    size: layout.musicPreviewSize
-                )
-                .offset(y: 10)
-                .opacity(showsAgentMusicContent ? 1 : 0)
-                .scaleEffect(showsAgentMusicContent ? 1 : 0.985)
-                .animation(.smooth(duration: 0.3, extraBounce: 0), value: showsAgentMusicContent)
-                .transition(
-                    .scale(scale: 0.985)
-                        .combined(with: .opacity)
-                        .combined(with: .offset(y: -4))
-                )
-                .zIndex(5)
             }
 
             if status == .focusPreview || (status == .focusCollapse && !focusCollapseShowsMusic && !hidesFocusStatusContentDuringReturn) {
@@ -181,17 +189,19 @@ extension ContentView {
                 )
                 .zIndex(3)
             }
+                }
+            }
         }
         .animation(
-            isAgentMusicTransitionActive ? .smooth(duration: 0.42, extraBounce: 0) : animation,
+            animation,
             value: layout.islandSize.width
         )
         .animation(
-            isAgentMusicTransitionActive ? .smooth(duration: 0.42, extraBounce: 0) : animation,
+            animation,
             value: layout.islandSize.height
         )
         .animation(
-            isAgentMusicTransitionActive ? .smooth(duration: 0.42, extraBounce: 0) : animation,
+            animation,
             value: layout.cornerRadius
         )
         .frame(width: clippedWidth, height: layout.islandSize.height)

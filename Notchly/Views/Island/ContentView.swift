@@ -57,10 +57,16 @@ struct ContentView: View {
     @State var displayedAgentEvent: AgentEvent?
     @State var agentPresentationStartedAt: Date?
     @State var agentDismissTask: Task<Void, Never>?
+    @State var agentPresentationTask: Task<Void, Never>?
+    @State var showsStandaloneAgentContent = false
+    @State var isStandaloneAgentClosing = false
     @State var showsAgentMusicContent = false
+    @State var agentMusicContentAppeared = false
     @State var hidesMusicContentDuringAgentReturn = false
     @State var agentMusicHideTask: Task<Void, Never>?
     @State var agentCollapseShowsMusic = true
+    @State var isAgentMusicClosing = false
+    @State var idleNotchSizeSuppressed = false
     @State var musicStartUsesIdleWidth = false
     @State var musicStartWidthTask: Task<Void, Never>?
     @State var musicEndKeepsFullWidth = false

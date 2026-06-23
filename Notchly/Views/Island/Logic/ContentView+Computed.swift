@@ -9,6 +9,17 @@ import SwiftUI
 import AppKit
 
 extension ContentView {
+    @ViewBuilder
+    private var nonAgentFallbackView: some View {
+        if settingsManager.showMusic && musicManager.hasNowPlayingContent {
+            musicContainer
+        } else if settingsManager.showBattery {
+            islandContainer
+        } else {
+            emptyBar
+        }
+    }
+
     var layout: IslandLayout {
         IslandLayout(
             status: layoutStatus,
@@ -51,7 +62,11 @@ extension ContentView {
             } else {
                 switch dynamicManager.currentModule {
                 case .agent:
-                    agentContainer
+                    if hasActiveAgentEvent {
+                        agentContainer
+                    } else {
+                        nonAgentFallbackView
+                    }
                 case .battery:
                     if settingsManager.showBattery {
                         islandContainer
@@ -144,13 +159,39 @@ extension ContentView {
 
     var usesIdleNotchSize: Bool {
         guard status == .closed else { return false }
-        guard agentEventManager.currentEvent == nil else { return false }
+        guard !idleNotchSizeSuppressed else { return false }
+        if activeAgentEvent != nil {
+            return canUseCompactAgentClosedSize
+        }
         guard !showChargingPop else { return false }
         guard !musicEndKeepsFullWidth else { return false }
         guard !musicStartUsesIdleWidth else { return true }
         guard !(settingsManager.showMusic && musicManager.hasNowPlayingContent) else { return false }
 
-        return dynamicManager.currentModule == .none
+        switch dynamicManager.currentModule {
+        case .none:
+            return true
+        case .agent:
+            return agentEventManager.currentEvent == nil
+        case .battery, .music:
+            return false
+        }
+    }
+
+    var canUseCompactAgentClosedSize: Bool {
+        guard status == .closed else { return false }
+        guard !idleNotchSizeSuppressed else { return false }
+        guard !showChargingPop else { return false }
+        guard !musicEndKeepsFullWidth else { return false }
+        guard !musicStartUsesIdleWidth else { return false }
+        guard !(settingsManager.showMusic && musicManager.hasNowPlayingContent) else { return false }
+
+        switch dynamicManager.currentModule {
+        case .none, .agent:
+            return true
+        case .battery, .music:
+            return false
+        }
     }
 
     var idleNotchSize: CGSize {
