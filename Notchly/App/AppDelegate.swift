@@ -11,6 +11,7 @@ import AppKit
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let environment = AppEnvironment()
     private var startupTask: Task<Void, Never>?
+    private var didValidateSingleInstance = false
 
     private lazy var menuController = AppMenuController(
         settingsWindow: environment.settingsWindow,
@@ -26,7 +27,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         environment: environment
     )
 
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        guard validateSingleRunningInstance() else { return }
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
+        guard validateSingleRunningInstance() else { return }
+
         NSApp.setActivationPolicy(.accessory)
 
         menuController.install()
@@ -59,5 +66,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         environment.brightnessManager.stop()
         lockScreenController.stop()
         overlayController.stop()
+    }
+
+    @discardableResult
+    private func validateSingleRunningInstance() -> Bool {
+        guard !didValidateSingleInstance else { return true }
+        didValidateSingleInstance = true
+
+        guard let bundleIdentifier = Bundle.main.bundleIdentifier else {
+            return true
+        }
+
+        let currentProcessIdentifier = ProcessInfo.processInfo.processIdentifier
+        let otherInstances = NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier)
+            .filter { $0.processIdentifier != currentProcessIdentifier }
+
+        guard let existingInstance = otherInstances.first else {
+            return true
+        }
+
+        existingInstance.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
+        NSApp.terminate(nil)
+        return false
     }
 }
