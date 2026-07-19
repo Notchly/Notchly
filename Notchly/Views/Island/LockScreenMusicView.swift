@@ -22,6 +22,8 @@ enum PlaybackState: Equatable {
 }
 
 struct LockScreenMusicView: View {
+    private let playerScale: CGFloat = 1.10
+
     let track: LockScreenTrack
     let playbackState: PlaybackState
     let progress: Double
@@ -116,6 +118,7 @@ struct LockScreenMusicView: View {
 
     var body: some View {
         playerSurface
+            .scaleEffect(playerScale)
             .overlay(alignment: .top) {
                 expandedArtworkView
                     .offset(y: -expandedArtworkSize - 18)

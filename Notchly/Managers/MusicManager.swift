@@ -84,6 +84,7 @@ final class MusicManager: ObservableObject {
     private let outputMutePollInterval: TimeInterval = 1.0
     private let outputVolumeEventThreshold = 0.045
     private let activeSourceScanThrottle: TimeInterval = 1.2
+    private let pausedSourceScanInterval = Duration.milliseconds(1_200)
 
     init() {
         bindMediaController()
@@ -936,13 +937,17 @@ final class MusicManager: ObservableObject {
     }
 
     private func fetchFirstPlayingTrackInfo(ignoring ignoredBundleIdentifier: String) async -> TrackInfo? {
-        for bundleIdentifier in activePlayerCandidateBundleIdentifiers where bundleIdentifier != ignoredBundleIdentifier {
-            guard let trackInfo = await fetchTrackInfo(for: bundleIdentifier) else { continue }
-            guard isPayloadPlaying(trackInfo.payload) else { continue }
-            return trackInfo
+        guard let trackInfo = await fetchCurrentTrackInfo(),
+              isPayloadPlaying(trackInfo.payload) else {
+            return nil
         }
 
-        return nil
+        let bundleIdentifier = trackInfo.payload.bundleIdentifier ?? ""
+        guard ignoredBundleIdentifier.isEmpty || bundleIdentifier != ignoredBundleIdentifier else {
+            return nil
+        }
+
+        return trackInfo
     }
 
     private func resolvePlayingTrackInfo(
@@ -973,17 +978,19 @@ final class MusicManager: ObservableObject {
     private func schedulePausedPlaybackValidation(bundleIdentifier: String) {
         guard pausedPlaybackValidationTask == nil else { return }
         guard !bundleIdentifier.isEmpty else { return }
+        let scanInterval = pausedSourceScanInterval
 
         pausedPlaybackValidationTask = Task { [weak self] in
-            for attempt in 0..<4 {
-                try? await Task.sleep(for: .milliseconds(attempt == 0 ? 450 : 800))
+            var isFirstScan = true
+
+            while !Task.isCancelled {
+                let delay = isFirstScan ? Duration.milliseconds(450) : scanInterval
+                isFirstScan = false
+                try? await Task.sleep(for: delay)
                 guard !Task.isCancelled, let self else { return }
 
-                let trackInfo: TrackInfo?
-                if let playingTrackInfo = await self.fetchFirstPlayingTrackInfo(ignoring: "") {
-                    trackInfo = playingTrackInfo
-                } else {
-                    trackInfo = await self.fetchTrackInfo(for: bundleIdentifier)
+                guard let trackInfo = await self.fetchFirstPlayingTrackInfo(ignoring: "") else {
+                    continue
                 }
 
                 await MainActor.run { [weak self] in
@@ -995,15 +1002,11 @@ final class MusicManager: ObservableObject {
                         return
                     }
 
-                    if let trackInfo, self.isPayloadPlaying(trackInfo.payload) {
+                    if self.isPayloadPlaying(trackInfo.payload) {
                         self.apply(trackInfo, allowsPausedSourceLookup: false)
                         self.stopPausedPlaybackValidation()
                     }
                 }
-            }
-
-            await MainActor.run { [weak self] in
-                self?.pausedPlaybackValidationTask = nil
             }
         }
     }
@@ -1023,18 +1026,13 @@ final class MusicManager: ObservableObject {
         }
     }
 
-    private var activePlayerCandidateBundleIdentifiers: [String] {
-        [
-            "com.spotify.client",
-            "com.apple.Music",
-            "com.google.android.youtube",
-            "com.google.Chrome",
-            "com.apple.Safari",
-            "com.brave.Browser",
-            "org.mozilla.firefox",
-            "com.microsoft.edgemac",
-            "company.thebrowser.Browser"
-        ]
+    private func fetchCurrentTrackInfo() async -> TrackInfo? {
+        await withCheckedContinuation { continuation in
+            let controller = MediaController()
+            controller.getTrackInfo { trackInfo in
+                continuation.resume(returning: trackInfo)
+            }
+        }
     }
 
     private func isPayloadPlaying(_ payload: TrackInfo.Payload) -> Bool {

@@ -20,8 +20,8 @@ struct LockScreenMusicPlayerView: View {
     @State private var skipIndicator: String?
     @State private var skipIndicatorTask: Task<Void, Never>?
 
-    private let playerWidth: CGFloat = 339
-    private let playerHeight: CGFloat = 154
+    private let playerWidth: CGFloat = 339 * 1.10
+    private let playerHeight: CGFloat = 154 * 1.10
 
     private var progress: CGFloat {
         guard musicManager.durationMs > 0 else { return 0 }

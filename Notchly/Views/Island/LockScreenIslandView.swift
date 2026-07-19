@@ -24,7 +24,7 @@ struct LockScreenIslandView: View {
             size: islandSize,
             cornerRadius: cornerRadius,
             spacing: 0,
-            shadowOpacity: 0.12
+            shadowOpacity: 0
         ) {
             HStack(spacing: 8) {
                 Image(systemName: showOpenedLock ? "lock.open.fill" : "lock.fill")

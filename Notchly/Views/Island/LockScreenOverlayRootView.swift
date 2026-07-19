@@ -29,8 +29,6 @@ struct LockScreenOverlayRootView: View {
     @State private var removePlayerTask: DispatchWorkItem?
     @State private var artworkTransitionID = UUID()
     @State private var lastHandledState: LockScreenOverlayState?
-    @State private var currentScreen: NSScreen?
-    @State private var resolvedClosedHeight: CGFloat = IslandHeightResolver.fallbackHeight
 
     init(
         model: LockScreenOverlayModel,
@@ -58,20 +56,30 @@ struct LockScreenOverlayRootView: View {
         _renderLockScreenPlayer = State(initialValue: initialState == .locked)
         _showLockScreenPlayer = State(initialValue: initialState == .locked)
         _lastHandledState = State(initialValue: initialState)
-        _resolvedClosedHeight = State(initialValue: initialClosedHeight)
-    }
-    
-    private func updateClosedHeight(for screen: NSScreen?) {
-        let nextHeight = IslandHeightResolver.closedHeight(for: screen)
-        guard resolvedClosedHeight != nextHeight else { return }
-        resolvedClosedHeight = nextHeight
     }
 
     private let unlockAnimationDuration: TimeInterval = 0.18
     private let playerHideAnimationDuration: TimeInterval = 0.18
+    private let expandedPlayerShift: CGFloat = 18
+    private let playerScale: CGFloat = 1.10
+    private let playerBaseHeight: CGFloat = 154
 
     private var isLockScreenPlayerVisible: Bool {
         displayedState == .locked && showLockScreenPlayer
+    }
+
+    private var displayedPlayerYPosition: CGFloat {
+        let lowerPlayerOffset = playerBaseHeight * playerScale * 0.10
+        let expandedCompositionOffset = model.isArtworkExpanded
+            ? displayedArtworkSize * 0.10
+            : 0
+        return lockScreenPlayerYPosition + lowerPlayerOffset + expandedCompositionOffset +
+            (model.isArtworkExpanded ? expandedPlayerShift : 0)
+    }
+
+    private var displayedArtworkSize: CGFloat {
+        guard model.isArtworkExpanded else { return expandedArtworkSize }
+        return (expandedArtworkSize + expandedPlayerShift) * 1.05
     }
 
     var body: some View {
@@ -85,11 +93,11 @@ struct LockScreenOverlayRootView: View {
                     settingsManager: settingsManager,
                     isVisible: isLockScreenPlayerVisible,
                     isArtworkExpanded: model.isArtworkExpanded,
-                    expandedArtworkSize: expandedArtworkSize,
+                    expandedArtworkSize: displayedArtworkSize,
                     onExpandArtwork: expandArtwork,
                     onCollapseArtwork: collapseArtwork
                 )
-                .position(x: screenSize.width / 2, y: lockScreenPlayerYPosition)
+                .position(x: screenSize.width / 2, y: displayedPlayerYPosition)
                 .opacity(isLockScreenPlayerVisible ? 1 : 0)
                 .scaleEffect(isLockScreenPlayerVisible ? 1 : 0.99)
                 .offset(y: isLockScreenPlayerVisible ? 0 : 26)
@@ -99,18 +107,17 @@ struct LockScreenOverlayRootView: View {
 
             LockScreenIslandView(
                 islandWidth: CGFloat(settingsManager.islandWidth),
-                height: resolvedClosedHeight,
+                height: initialClosedHeight,
                 isUnlocking: isUnlocking,
                 showOpenedLock: showOpenedLock
             )
-            .position(x: screenSize.width / 2, y: resolvedClosedHeight / 2)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .opacity(displayedState == .locked ? 1 : 0)
             .allowsHitTesting(false)
             .zIndex(displayedState == .locked ? 3 : 1)
 
         }
         .frame(width: screenSize.width, height: screenSize.height)
-        .ignoresSafeArea(.all)
         .animation(.easeOut(duration: 0.16), value: displayedState)
         .animation(.easeInOut(duration: playerHideAnimationDuration), value: showLockScreenPlayer)
         .onAppear {
@@ -147,12 +154,8 @@ struct LockScreenOverlayRootView: View {
                 wallpaperManager.restore()
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSWorkspace.sessionDidResignActiveNotification)) { _ in
-            updateClosedHeight(for: currentScreen)
-        }
         .onReceive(NotificationCenter.default.publisher(for: NSWorkspace.sessionDidBecomeActiveNotification)) { _ in
             hideLockScreenPlayerForUnlock()
-            updateClosedHeight(for: currentScreen)
         }
         .onReceive(DistributedNotificationCenter.default().publisher(for: NSNotification.Name("com.apple.screenIsUnlocked"))) { _ in
             hideLockScreenPlayerForUnlock()
@@ -162,17 +165,6 @@ struct LockScreenOverlayRootView: View {
             model.isArtworkExpanded = false
             wallpaperManager.restore()
         }
-        .background(
-            WindowScreenReader { screen in
-                guard currentScreen !== screen else {
-                    updateClosedHeight(for: screen)
-                    return
-                }
-
-                currentScreen = screen
-                updateClosedHeight(for: screen)
-            }
-        )
     }
 
     @MainActor
