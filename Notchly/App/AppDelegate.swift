@@ -15,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private lazy var menuController = AppMenuController(
         settingsWindow: environment.settingsWindow,
+        whatsNewWindow: environment.whatsNewWindow,
         updaterController: environment.updaterController,
         agentEventManager: environment.agentEventManager
     )
@@ -54,6 +55,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             try? await Task.sleep(for: .milliseconds(350))
             guard !Task.isCancelled else { return }
             self.environment.brightnessManager.start()
+            self.environment.whatsNewWindow.showIfNeeded()
             self.startupTask = nil
         }
     }

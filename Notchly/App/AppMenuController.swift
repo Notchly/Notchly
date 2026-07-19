@@ -14,15 +14,18 @@ final class AppMenuController: NSObject {
     private var hasStartedUpdater = false
 
     private let settingsWindow: SettingsWindow
+    private let whatsNewWindow: WhatsNewWindow
     private let updaterController: SPUStandardUpdaterController
     private let agentEventManager: AgentEventManager
 
     init(
         settingsWindow: SettingsWindow,
+        whatsNewWindow: WhatsNewWindow,
         updaterController: SPUStandardUpdaterController,
         agentEventManager: AgentEventManager
     ) {
         self.settingsWindow = settingsWindow
+        self.whatsNewWindow = whatsNewWindow
         self.updaterController = updaterController
         self.agentEventManager = agentEventManager
         super.init()
@@ -66,6 +69,13 @@ final class AppMenuController: NSObject {
         )
         updatesItem.target = self
 
+        let whatsNewItem = NSMenuItem(
+            title: "What's New...",
+            action: #selector(openWhatsNew),
+            keyEquivalent: ""
+        )
+        whatsNewItem.target = self
+
         let quitItem = NSMenuItem(
             title: "Quit",
             action: #selector(quitApp),
@@ -93,9 +103,18 @@ final class AppMenuController: NSObject {
         )
         testCursorItem.target = self
         menu.addItem(testCursorItem)
+
+        let testWhatsNewItem = NSMenuItem(
+            title: "Test What's New Update",
+            action: #selector(testWhatsNewUpdate),
+            keyEquivalent: ""
+        )
+        testWhatsNewItem.target = self
+        menu.addItem(testWhatsNewItem)
 #endif
 
         menu.addItem(.separator())
+        menu.addItem(whatsNewItem)
         menu.addItem(updatesItem)
         menu.addItem(quitItem)
         return menu
@@ -121,10 +140,18 @@ final class AppMenuController: NSObject {
             ttl: 3.0
         )
     }
+
+    @objc private func testWhatsNewUpdate() {
+        whatsNewWindow.simulateUpdateForTesting()
+    }
 #endif
 
     @objc private func openSettings() {
         settingsWindow.show()
+    }
+
+    @objc private func openWhatsNew() {
+        whatsNewWindow.show()
     }
 
     @objc private func checkForUpdates() {
