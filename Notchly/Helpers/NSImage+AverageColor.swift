@@ -6,29 +6,41 @@
 //
 
 import AppKit
-import SwiftUI
 
-extension NSImage {
-    func resizedForArtwork(maxPixelSize: CGFloat = 96) -> NSImage {
-        guard let cgImage = cgImage(forProposedRect: nil, context: nil, hints: nil) else {
-            return self
-        }
+struct PreparedArtworkImages: @unchecked Sendable {
+    let displayImage: CGImage
+    let wallpaperImage: CGImage
+    let averageColor: ArtworkAverageColor?
+}
 
-        let sourceSize = CGSize(width: cgImage.width, height: cgImage.height)
+struct ArtworkAverageColor: Sendable {
+    let red: CGFloat
+    let green: CGFloat
+    let blue: CGFloat
+}
+
+nonisolated enum ArtworkImageProcessor {
+    static func prepare(_ sourceImage: CGImage) -> PreparedArtworkImages {
+        let displayImage = resized(sourceImage, maximumPixelSize: 96)
+        let wallpaperImage = resized(sourceImage, maximumPixelSize: 1600)
+
+        return PreparedArtworkImages(
+            displayImage: displayImage,
+            wallpaperImage: wallpaperImage,
+            averageColor: averageColor(of: displayImage)
+        )
+    }
+
+    private static func resized(_ sourceImage: CGImage, maximumPixelSize: CGFloat) -> CGImage {
+        let sourceSize = CGSize(width: sourceImage.width, height: sourceImage.height)
         let longestSide = max(sourceSize.width, sourceSize.height)
-        guard longestSide > maxPixelSize else {
-            cacheMode = .never
-            return self
-        }
+        guard longestSide > maximumPixelSize else { return sourceImage }
 
-        let scale = maxPixelSize / longestSide
+        let scale = maximumPixelSize / longestSide
         let targetSize = CGSize(
             width: max(1, floor(sourceSize.width * scale)),
             height: max(1, floor(sourceSize.height * scale))
         )
-
-        let targetRect = CGRect(origin: .zero, size: targetSize)
-        let colorSpace = CGColorSpaceCreateDeviceRGB()
 
         guard let context = CGContext(
             data: nil,
@@ -36,54 +48,40 @@ extension NSImage {
             height: Int(targetSize.height),
             bitsPerComponent: 8,
             bytesPerRow: 0,
-            space: colorSpace,
+            space: CGColorSpaceCreateDeviceRGB(),
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
         ) else {
-            return self
+            return sourceImage
         }
 
         context.interpolationQuality = .high
-        context.draw(cgImage, in: targetRect)
-
-        guard let resizedCGImage = context.makeImage() else {
-            return self
-        }
-
-        let image = NSImage(cgImage: resizedCGImage, size: targetSize)
-        image.cacheMode = .never
-        return image
+        context.draw(sourceImage, in: CGRect(origin: .zero, size: targetSize))
+        return context.makeImage() ?? sourceImage
     }
 
-    var averageColor: NSColor? {
-        guard let cgImage = cgImage(forProposedRect: nil, context: nil, hints: nil) else {
-            return nil
-        }
-
+    private static func averageColor(of image: CGImage) -> ArtworkAverageColor? {
         var bitmap = [UInt8](repeating: 0, count: 4)
-        let colorSpace = CGColorSpaceCreateDeviceRGB()
         guard let context = CGContext(
             data: &bitmap,
             width: 1,
             height: 1,
             bitsPerComponent: 8,
             bytesPerRow: 4,
-            space: colorSpace,
+            space: CGColorSpaceCreateDeviceRGB(),
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
         ) else {
             return nil
         }
 
         context.interpolationQuality = .low
-        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+        context.draw(image, in: CGRect(x: 0, y: 0, width: 1, height: 1))
 
-        return NSColor(
+        return ArtworkAverageColor(
             red: CGFloat(bitmap[0]) / 255.0,
             green: CGFloat(bitmap[1]) / 255.0,
-            blue: CGFloat(bitmap[2]) / 255.0,
-            alpha: 1
+            blue: CGFloat(bitmap[2]) / 255.0
         )
     }
-
 }
 
 extension NSColor {

@@ -16,7 +16,9 @@ struct ContentView: View {
     @ObservedObject var focusManager: FocusManager
     @ObservedObject var brightnessManager: BrightnessManager
     @ObservedObject var agentEventManager: AgentEventManager
+    @ObservedObject var lockScreenOverlayModel: LockScreenOverlayModel
     let animationsEnabled: Bool
+    let onClosedHeightChange: (CGFloat) -> Void
 
     @State var status: IslandStatus = .closed
     @State var showChargingPop = false
@@ -75,9 +77,13 @@ struct ContentView: View {
     @State var resolvedClosedHeight: CGFloat = 36
     
     private func updateClosedHeight(for screen: NSScreen?) {
+        guard lockScreenOverlayModel.state == .music else { return }
+
         let nextHeight = IslandHeightResolver.closedHeight(for: screen)
-        guard resolvedClosedHeight != nextHeight else { return }
-        resolvedClosedHeight = nextHeight
+        if resolvedClosedHeight != nextHeight {
+            resolvedClosedHeight = nextHeight
+        }
+        onClosedHeightChange(nextHeight)
     }
 
     var body: some View {
@@ -105,6 +111,9 @@ struct ContentView: View {
         islandRootView
         .onAppear {
             handleAppear()
+        }
+        .onDisappear {
+            handleDisappear()
         }
         .onChange(of: batteryManager.isCharging) { _, newValue in
             handleChargingChange(newValue)

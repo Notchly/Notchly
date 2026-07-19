@@ -15,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private lazy var menuController = AppMenuController(
         settingsWindow: environment.settingsWindow,
+        whatsNewWindow: environment.whatsNewWindow,
         updaterController: environment.updaterController,
         agentEventManager: environment.agentEventManager
     )
@@ -29,6 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         guard validateSingleRunningInstance() else { return }
+        environment.lockScreenWallpaperManager.recoverSynchronously()
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -53,6 +55,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             try? await Task.sleep(for: .milliseconds(350))
             guard !Task.isCancelled else { return }
             self.environment.brightnessManager.start()
+            self.environment.whatsNewWindow.showIfNeeded()
             self.startupTask = nil
         }
     }
@@ -66,6 +69,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         environment.brightnessManager.stop()
         lockScreenController.stop()
         overlayController.stop()
+        environment.lockScreenWallpaperManager.restoreSynchronously()
     }
 
     @discardableResult
@@ -85,7 +89,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return true
         }
 
-        existingInstance.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
+        existingInstance.activate(options: [.activateAllWindows])
         NSApp.terminate(nil)
         return false
     }

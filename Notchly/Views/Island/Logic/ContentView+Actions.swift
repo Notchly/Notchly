@@ -42,6 +42,27 @@ extension ContentView {
         }
     }
 
+    func handleDisappear() {
+        autoExpandMusicTask?.cancel()
+        autoExpandMusicTask = nil
+        focusStatusTask?.cancel()
+        focusStatusTask = nil
+        brightnessStatusTask?.cancel()
+        brightnessStatusTask = nil
+        volumeStatusTask?.cancel()
+        volumeStatusTask = nil
+        agentDismissTask?.cancel()
+        agentDismissTask = nil
+        agentPresentationTask?.cancel()
+        agentPresentationTask = nil
+        agentMusicHideTask?.cancel()
+        agentMusicHideTask = nil
+        musicStartWidthTask?.cancel()
+        musicStartWidthTask = nil
+        musicEndWidthTask?.cancel()
+        musicEndWidthTask = nil
+    }
+
     func handleHover(_ hovering: Bool) {
         guard isPointerInsideIsland != hovering else { return }
 
@@ -467,7 +488,7 @@ extension ContentView {
             if let runningApp = workspace.runningApplications.first(where: {
                 $0.bundleIdentifier?.lowercased() == bundleIdentifier
             }) {
-                runningApp.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
+                runningApp.activate(options: [.activateAllWindows])
                 return
             }
 
@@ -487,7 +508,7 @@ extension ContentView {
                 localizedName: localizedName
             )
         }) {
-            runningApp.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
+            runningApp.activate(options: [.activateAllWindows])
             return
         }
 

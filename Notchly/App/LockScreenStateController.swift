@@ -45,7 +45,7 @@ final class LockScreenStateController {
             queue: .main
         ) { [weak self] _ in
             MainActor.assumeIsolated {
-                self?.startPolling()
+                self?.handleStateNotification(.locked)
             }
         }
 
@@ -55,11 +55,21 @@ final class LockScreenStateController {
             queue: .main
         ) { [weak self] _ in
             MainActor.assumeIsolated {
-                self?.startPolling()
+                self?.handleStateNotification(.music)
             }
         }
 
         observers = [lockObserver, unlockObserver]
+    }
+
+    private func handleStateNotification(_ state: LockScreenOverlayState) {
+        // Distributed lock notifications are authoritative. Querying the
+        // session immediately can return the previous state for several polls.
+        pollingTask?.cancel()
+        pollingTask = nil
+
+        guard model.state != state else { return }
+        model.state = state
     }
 
     private func startPolling() {

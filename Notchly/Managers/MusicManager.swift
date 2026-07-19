@@ -31,6 +31,7 @@ final class MusicManager: ObservableObject {
     @MainActor @Published private(set) var sourceName: String = ""
     @MainActor @Published private(set) var currentSource: MusicSource = .none
     @MainActor @Published private(set) var artworkImage: NSImage?
+    @MainActor @Published private(set) var wallpaperArtworkImage: NSImage?
     @MainActor @Published private(set) var waveformColor: Color = .white
     @MainActor @Published private(set) var outputVolume: Double = 0.5
     @MainActor @Published private(set) var isOutputMuted: Bool = false
@@ -55,6 +56,11 @@ final class MusicManager: ObservableObject {
     private var volumePollTimer: Timer?
     private var appTerminationObserver: NSObjectProtocol?
     private var isStarted = false
+    private let artworkProcessingQueue = DispatchQueue(
+        label: "xyz.notchly.artwork-processing",
+        qos: .userInitiated
+    )
+    private let artworkProcessingState = ArtworkProcessingState()
 
     private var basePlaybackPosition: Double = 0
     private var baseSyncDate: Date?
@@ -62,6 +68,7 @@ final class MusicManager: ObservableObject {
     private var isPreviewSeeking = false
     private var currentTrackIdentity: String = ""
     private var displayedArtworkIdentity: String = ""
+    private var pendingArtworkIdentity: String = ""
     private var currentPlayerBundleIdentifier: String = ""
     private var lastAudibleOutputVolume: Double = 0.5
     private var ignoreTransientZeroProgressUntil: Date?
@@ -77,6 +84,7 @@ final class MusicManager: ObservableObject {
     private let outputMutePollInterval: TimeInterval = 1.0
     private let outputVolumeEventThreshold = 0.045
     private let activeSourceScanThrottle: TimeInterval = 1.2
+    private let pausedSourceScanInterval = Duration.milliseconds(1_200)
 
     init() {
         bindMediaController()
@@ -139,6 +147,8 @@ final class MusicManager: ObservableObject {
         pausedPlaybackValidationTask = nil
         artworkClearTask?.cancel()
         artworkClearTask = nil
+        artworkProcessingState.invalidate()
+        pendingArtworkIdentity = ""
         volumePollTimer?.invalidate()
         volumePollTimer = nil
         mediaController.stopListening()
@@ -152,21 +162,12 @@ final class MusicManager: ObservableObject {
         activeSourceRefreshTask?.cancel()
         pausedPlaybackValidationTask?.cancel()
         artworkClearTask?.cancel()
+        artworkProcessingState.invalidate()
         volumePollTimer?.invalidate()
         if let appTerminationObserver {
             NSWorkspace.shared.notificationCenter.removeObserver(appTerminationObserver)
         }
         mediaController.stopListening()
-    }
-
-    private func bootstrapNowPlaying() async {
-        for attempt in 0..<5 {
-            let gotTrack = await fetchTrackInfoOnce()
-            if gotTrack { return }
-
-            let delayMs: UInt64 = min(UInt64(500) * UInt64(1 << attempt), 4000)
-            try? await Task.sleep(nanoseconds: delayMs * 1_000_000)
-        }
     }
 
     private func fetchTrackInfoOnce() async -> Bool {
@@ -371,6 +372,8 @@ final class MusicManager: ObservableObject {
     @MainActor
     private func updateArtwork(from artwork: NSImage?, for trackIdentity: String) {
         guard let artwork else {
+            artworkProcessingState.invalidate()
+            pendingArtworkIdentity = ""
             scheduleArtworkClear(for: trackIdentity)
             return
         }
@@ -378,27 +381,80 @@ final class MusicManager: ObservableObject {
         artworkClearTask?.cancel()
         artworkClearTask = nil
 
-        guard displayedArtworkIdentity != trackIdentity || !artworkAvailable || artworkImage == nil else {
+        guard displayedArtworkIdentity != trackIdentity ||
+                !artworkAvailable ||
+                artworkImage == nil ||
+                wallpaperArtworkImage == nil else {
+            return
+        }
+        guard pendingArtworkIdentity != trackIdentity else { return }
+        guard let sourceImage = artwork.cgImage(
+            forProposedRect: nil,
+            context: nil,
+            hints: nil
+        ) else {
             return
         }
 
-        let artworkPayload = autoreleasepool {
-            let preparedArtwork = artwork.resizedForArtwork()
-            let color = preparedArtwork.averageColor?.boostedForWaveform
-            return (image: preparedArtwork, color: color)
+        pendingArtworkIdentity = trackIdentity
+        let requestID = artworkProcessingState.begin()
+        let processingState = artworkProcessingState
+
+        artworkProcessingQueue.async { [weak self] in
+            guard processingState.isCurrent(requestID) else { return }
+
+            let artworkPayload = autoreleasepool {
+                ArtworkImageProcessor.prepare(sourceImage)
+            }
+
+            guard processingState.isCurrent(requestID) else { return }
+            DispatchQueue.main.async { [weak self] in
+                self?.applyPreparedArtwork(
+                    artworkPayload,
+                    for: trackIdentity,
+                    requestID: requestID
+                )
+            }
+        }
+    }
+
+    @MainActor
+    private func applyPreparedArtwork(
+        _ artworkPayload: PreparedArtworkImages,
+        for trackIdentity: String,
+        requestID: UUID
+    ) {
+        guard artworkProcessingState.isCurrent(requestID),
+              currentTrackIdentity == trackIdentity else {
+            if pendingArtworkIdentity == trackIdentity {
+                pendingArtworkIdentity = ""
+            }
+            return
         }
 
-        let preparedArtwork = artworkPayload.image
+        let preparedArtwork = makeImage(from: artworkPayload.displayImage)
+        let wallpaperArtwork = makeImage(from: artworkPayload.wallpaperImage)
+
+        pendingArtworkIdentity = ""
         displayedArtworkIdentity = trackIdentity
         if artworkImage !== preparedArtwork {
             artworkImage = preparedArtwork
+        }
+        if wallpaperArtworkImage !== wallpaperArtwork {
+            wallpaperArtworkImage = wallpaperArtwork
         }
         if !artworkAvailable {
             artworkAvailable = true
         }
 
-        if let avgColor = artworkPayload.color {
-            let nextWaveformColor = Color(nsColor: avgColor)
+        if let averageColor = artworkPayload.averageColor {
+            let color = NSColor(
+                red: averageColor.red,
+                green: averageColor.green,
+                blue: averageColor.blue,
+                alpha: 1
+            ).boostedForWaveform
+            let nextWaveformColor = Color(nsColor: color)
             if waveformColor != nextWaveformColor {
                 waveformColor = nextWaveformColor
             }
@@ -407,6 +463,14 @@ final class MusicManager: ObservableObject {
                 waveformColor = .white
             }
         }
+    }
+
+    @MainActor
+    private func makeImage(from cgImage: CGImage) -> NSImage {
+        let size = NSSize(width: cgImage.width, height: cgImage.height)
+        let image = NSImage(cgImage: cgImage, size: size)
+        image.cacheMode = .never
+        return image
     }
 
     @MainActor
@@ -439,9 +503,14 @@ final class MusicManager: ObservableObject {
     private func clearArtworkImmediately() {
         artworkClearTask?.cancel()
         artworkClearTask = nil
+        artworkProcessingState.invalidate()
+        pendingArtworkIdentity = ""
 
         if artworkImage != nil {
             artworkImage = nil
+        }
+        if wallpaperArtworkImage != nil {
+            wallpaperArtworkImage = nil
         }
         if artworkAvailable {
             artworkAvailable = false
@@ -868,13 +937,17 @@ final class MusicManager: ObservableObject {
     }
 
     private func fetchFirstPlayingTrackInfo(ignoring ignoredBundleIdentifier: String) async -> TrackInfo? {
-        for bundleIdentifier in activePlayerCandidateBundleIdentifiers where bundleIdentifier != ignoredBundleIdentifier {
-            guard let trackInfo = await fetchTrackInfo(for: bundleIdentifier) else { continue }
-            guard isPayloadPlaying(trackInfo.payload) else { continue }
-            return trackInfo
+        guard let trackInfo = await fetchCurrentTrackInfo(),
+              isPayloadPlaying(trackInfo.payload) else {
+            return nil
         }
 
-        return nil
+        let bundleIdentifier = trackInfo.payload.bundleIdentifier ?? ""
+        guard ignoredBundleIdentifier.isEmpty || bundleIdentifier != ignoredBundleIdentifier else {
+            return nil
+        }
+
+        return trackInfo
     }
 
     private func resolvePlayingTrackInfo(
@@ -905,17 +978,19 @@ final class MusicManager: ObservableObject {
     private func schedulePausedPlaybackValidation(bundleIdentifier: String) {
         guard pausedPlaybackValidationTask == nil else { return }
         guard !bundleIdentifier.isEmpty else { return }
+        let scanInterval = pausedSourceScanInterval
 
         pausedPlaybackValidationTask = Task { [weak self] in
-            for attempt in 0..<4 {
-                try? await Task.sleep(for: .milliseconds(attempt == 0 ? 450 : 800))
+            var isFirstScan = true
+
+            while !Task.isCancelled {
+                let delay = isFirstScan ? Duration.milliseconds(450) : scanInterval
+                isFirstScan = false
+                try? await Task.sleep(for: delay)
                 guard !Task.isCancelled, let self else { return }
 
-                let trackInfo: TrackInfo?
-                if let playingTrackInfo = await self.fetchFirstPlayingTrackInfo(ignoring: "") {
-                    trackInfo = playingTrackInfo
-                } else {
-                    trackInfo = await self.fetchTrackInfo(for: bundleIdentifier)
+                guard let trackInfo = await self.fetchFirstPlayingTrackInfo(ignoring: "") else {
+                    continue
                 }
 
                 await MainActor.run { [weak self] in
@@ -927,15 +1002,11 @@ final class MusicManager: ObservableObject {
                         return
                     }
 
-                    if let trackInfo, self.isPayloadPlaying(trackInfo.payload) {
+                    if self.isPayloadPlaying(trackInfo.payload) {
                         self.apply(trackInfo, allowsPausedSourceLookup: false)
                         self.stopPausedPlaybackValidation()
                     }
                 }
-            }
-
-            await MainActor.run { [weak self] in
-                self?.pausedPlaybackValidationTask = nil
             }
         }
     }
@@ -955,18 +1026,13 @@ final class MusicManager: ObservableObject {
         }
     }
 
-    private var activePlayerCandidateBundleIdentifiers: [String] {
-        [
-            "com.spotify.client",
-            "com.apple.Music",
-            "com.google.android.youtube",
-            "com.google.Chrome",
-            "com.apple.Safari",
-            "com.brave.Browser",
-            "org.mozilla.firefox",
-            "com.microsoft.edgemac",
-            "company.thebrowser.Browser"
-        ]
+    private func fetchCurrentTrackInfo() async -> TrackInfo? {
+        await withCheckedContinuation { continuation in
+            let controller = MediaController()
+            controller.getTrackInfo { trackInfo in
+                continuation.resume(returning: trackInfo)
+            }
+        }
     }
 
     private func isPayloadPlaying(_ payload: TrackInfo.Payload) -> Bool {
@@ -1151,6 +1217,32 @@ final class MusicManager: ObservableObject {
         }
     }
 
+}
+
+private final class ArtworkProcessingState: @unchecked Sendable {
+    private let lock = NSLock()
+    private var currentRequestID = UUID()
+
+    func begin() -> UUID {
+        lock.lock()
+        defer { lock.unlock() }
+
+        let requestID = UUID()
+        currentRequestID = requestID
+        return requestID
+    }
+
+    func invalidate() {
+        lock.lock()
+        currentRequestID = UUID()
+        lock.unlock()
+    }
+
+    func isCurrent(_ requestID: UUID) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return currentRequestID == requestID
+    }
 }
 
 private enum SystemOutputVolume {
