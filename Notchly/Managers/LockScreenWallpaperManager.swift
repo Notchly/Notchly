@@ -70,7 +70,11 @@ final class LockScreenWallpaperManager {
         operationID = UUID()
         let currentOperationID = operationID
 
-        guard let artworkData = artwork.tiffRepresentation,
+        guard let sourceImage = artwork.cgImage(
+            forProposedRect: nil,
+            context: nil,
+            hints: nil
+        ),
               let originalURL = originalWallpaper?.url ?? workspace.desktopImageURL(for: screen) else {
             onReadyToApply()
             return
@@ -100,7 +104,7 @@ final class LockScreenWallpaperManager {
 
             renderQueue.async { [weak self] in
                 guard let jpegData = renderer.renderJPEG(
-                    artworkData: artworkData,
+                    sourceImage: sourceImage,
                     targetSize: targetSize
                 ) else {
                     DispatchQueue.main.async {
@@ -254,12 +258,7 @@ private nonisolated final class LockScreenBackdropRenderer: @unchecked Sendable 
         self.maximumSide = maximumSide
     }
 
-    func renderJPEG(artworkData: Data, targetSize: CGSize) -> Data? {
-        guard let source = CGImageSourceCreateWithData(artworkData as CFData, nil),
-              let sourceImage = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
-            return nil
-        }
-
+    func renderJPEG(sourceImage: CGImage, targetSize: CGSize) -> Data? {
         let composition = LockScreenBackdropComposition(
             sourceImage: sourceImage,
             targetSize: targetSize,

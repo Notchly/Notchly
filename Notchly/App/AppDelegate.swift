@@ -87,7 +87,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return true
         }
 
-        existingInstance.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
+        existingInstance.activate(options: [.activateAllWindows])
         NSApp.terminate(nil)
         return false
     }

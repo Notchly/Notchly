@@ -106,6 +106,9 @@ struct ContentView: View {
         .onAppear {
             handleAppear()
         }
+        .onDisappear {
+            handleDisappear()
+        }
         .onChange(of: batteryManager.isCharging) { _, newValue in
             handleChargingChange(newValue)
         }

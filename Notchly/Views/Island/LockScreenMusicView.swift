@@ -193,14 +193,10 @@ struct LockScreenMusicView: View {
 
     private var trackInfoSection: some View {
         HStack(spacing: 12) {
-            Group {
-                if isArtworkExpanded {
-                    Color.clear
-                } else {
-                    artworkButton
-                }
+            if !isArtworkExpanded {
+                artworkButton
+                    .frame(width: 48, height: 48)
             }
-            .frame(width: 48, height: 48)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(title)
@@ -235,6 +231,7 @@ struct LockScreenMusicView: View {
             .accessibilityLabel("Audio activity")
         }
         .frame(height: 48)
+        .animation(reduceMotion ? nil : .smooth(duration: 0.30, extraBounce: 0), value: isArtworkExpanded)
     }
 
     private var artworkView: some View {
@@ -242,6 +239,8 @@ struct LockScreenMusicView: View {
             if let artwork = track.artwork {
                 Image(nsImage: artwork)
                     .resizable()
+                    .interpolation(.high)
+                    .antialiased(true)
                     .aspectRatio(contentMode: .fill)
                     .frame(width: 48, height: 48)
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -284,6 +283,8 @@ struct LockScreenMusicView: View {
             Button(action: onCollapseArtwork) {
                 Image(nsImage: artwork)
                     .resizable()
+                    .interpolation(.high)
+                    .antialiased(true)
                     .scaledToFill()
                     .frame(width: expandedArtworkSize, height: expandedArtworkSize)
                     .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
@@ -418,10 +419,6 @@ struct PlaybackProgressView: View {
         .frame(height: 20)
     }
 
-    private func normalizedProgress(_ xPosition: CGFloat, width: CGFloat) -> Double {
-        guard width > 0 else { return clampedProgress }
-        return min(max(Double(xPosition / width), 0), 1)
-    }
 }
 
 struct PlaybackControlsView: View {
