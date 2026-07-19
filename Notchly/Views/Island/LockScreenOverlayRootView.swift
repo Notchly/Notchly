@@ -12,8 +12,11 @@ struct LockScreenOverlayRootView: View {
     @ObservedObject var settingsManager: SettingsManager
 
     let musicManager: MusicManager
+    let wallpaperManager: LockScreenWallpaperManager
+    let wallpaperScreen: NSScreen
     let screenSize: CGSize
     let lockScreenPlayerYPosition: CGFloat
+    let expandedArtworkSize: CGFloat
     let initialClosedHeight: CGFloat
 
     @State private var displayedState: LockScreenOverlayState = .locked
@@ -24,24 +27,30 @@ struct LockScreenOverlayRootView: View {
     @State private var openLockTask: DispatchWorkItem?
     @State private var completeTask: DispatchWorkItem?
     @State private var removePlayerTask: DispatchWorkItem?
+    @State private var artworkTransitionID = UUID()
     @State private var lastHandledState: LockScreenOverlayState?
     @State private var currentScreen: NSScreen?
     @State private var resolvedClosedHeight: CGFloat = IslandHeightResolver.fallbackHeight
-    @State private var isArtworkExpanded = false
 
     init(
         model: LockScreenOverlayModel,
         settingsManager: SettingsManager,
         musicManager: MusicManager,
+        wallpaperManager: LockScreenWallpaperManager,
+        wallpaperScreen: NSScreen,
         screenSize: CGSize,
         lockScreenPlayerYPosition: CGFloat,
+        expandedArtworkSize: CGFloat,
         initialClosedHeight: CGFloat
     ) {
         self.model = model
         self.settingsManager = settingsManager
         self.musicManager = musicManager
+        self.wallpaperManager = wallpaperManager
+        self.wallpaperScreen = wallpaperScreen
         self.screenSize = screenSize
         self.lockScreenPlayerYPosition = lockScreenPlayerYPosition
+        self.expandedArtworkSize = expandedArtworkSize
         self.initialClosedHeight = initialClosedHeight
 
         let initialState = model.state
@@ -73,20 +82,12 @@ struct LockScreenOverlayRootView: View {
             if renderLockScreenPlayer && settingsManager.showMusic && musicManager.hasNowPlayingContent {
                 LockScreenMusicPlayerView(
                     musicManager: musicManager,
+                    settingsManager: settingsManager,
                     isVisible: isLockScreenPlayerVisible,
-                    isArtworkExpanded: isArtworkExpanded,
-                    onExpandArtwork: {
-                        guard musicManager.artworkImage != nil else { return }
-
-                        withAnimation(.spring(response: 0.42, dampingFraction: 0.9)) {
-                            isArtworkExpanded = true
-                        }
-                    },
-                    onCollapseArtwork: {
-                        withAnimation(.spring(response: 0.36, dampingFraction: 0.88)) {
-                            isArtworkExpanded = false
-                        }
-                    }
+                    isArtworkExpanded: model.isArtworkExpanded,
+                    expandedArtworkSize: expandedArtworkSize,
+                    onExpandArtwork: expandArtwork,
+                    onCollapseArtwork: collapseArtwork
                 )
                 .position(x: screenSize.width / 2, y: lockScreenPlayerYPosition)
                 .opacity(isLockScreenPlayerVisible ? 1 : 0)
@@ -123,12 +124,27 @@ struct LockScreenOverlayRootView: View {
         }
         .onChange(of: musicManager.artworkImage) { _, artworkImage in
             if artworkImage == nil {
-                isArtworkExpanded = false
+                artworkTransitionID = UUID()
+                model.isArtworkExpanded = false
+                wallpaperManager.restore()
+            }
+        }
+        .onChange(of: musicManager.wallpaperArtworkImage) { _, artworkImage in
+            guard model.isArtworkExpanded else { return }
+
+            if artworkImage == nil {
+                artworkTransitionID = UUID()
+                model.isArtworkExpanded = false
+                wallpaperManager.restore()
+            } else {
+                applyArtworkWallpaper()
             }
         }
         .onChange(of: musicManager.hasNowPlayingContent) { _, hasNowPlayingContent in
             if !hasNowPlayingContent {
-                isArtworkExpanded = false
+                artworkTransitionID = UUID()
+                model.isArtworkExpanded = false
+                wallpaperManager.restore()
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSWorkspace.sessionDidResignActiveNotification)) { _ in
@@ -143,6 +159,8 @@ struct LockScreenOverlayRootView: View {
         }
         .onDisappear {
             cancelPendingTasks()
+            model.isArtworkExpanded = false
+            wallpaperManager.restore()
         }
         .background(
             WindowScreenReader { screen in
@@ -175,7 +193,8 @@ struct LockScreenOverlayRootView: View {
             }
 
         case .music:
-            isArtworkExpanded = false
+            model.isArtworkExpanded = false
+            wallpaperManager.restore()
 
             guard displayedState == .locked else {
                 showLockScreenPlayer = false
@@ -231,20 +250,25 @@ struct LockScreenOverlayRootView: View {
 
         removePlayerTask?.cancel()
         removePlayerTask = nil
+
+        artworkTransitionID = UUID()
     }
 
     @MainActor
     private func hideLockScreenPlayerForUnlock() {
         guard showLockScreenPlayer || renderLockScreenPlayer else { return }
         removePlayerTask?.cancel()
+        artworkTransitionID = UUID()
 
         if showLockScreenPlayer {
             withAnimation(.easeInOut(duration: playerHideAnimationDuration)) {
-                isArtworkExpanded = false
+                model.isArtworkExpanded = false
                 showLockScreenPlayer = false
             }
+            wallpaperManager.restore()
         } else {
-            isArtworkExpanded = false
+            model.isArtworkExpanded = false
+            wallpaperManager.restore()
         }
 
         let newRemovePlayerTask = DispatchWorkItem {
@@ -257,4 +281,40 @@ struct LockScreenOverlayRootView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + playerHideAnimationDuration + 0.02, execute: newRemovePlayerTask)
     }
 
+    private func applyArtworkWallpaper(onReadyToApply: @escaping @MainActor () -> Void = {}) {
+        guard let artwork = musicManager.wallpaperArtworkImage ?? musicManager.artworkImage else { return }
+        wallpaperManager.apply(
+            artwork: artwork,
+            on: wallpaperScreen,
+            onReadyToApply: onReadyToApply
+        )
+    }
+
+    @MainActor
+    private func expandArtwork() {
+        guard musicManager.wallpaperArtworkImage != nil || musicManager.artworkImage != nil else { return }
+
+        let transitionID = UUID()
+        artworkTransitionID = transitionID
+        applyArtworkWallpaper {
+            guard artworkTransitionID == transitionID,
+                  displayedState == .locked else { return }
+
+            withAnimation(.smooth(duration: 0.30, extraBounce: 0)) {
+                model.isArtworkExpanded = true
+            }
+        }
+    }
+
+    @MainActor
+    private func collapseArtwork() {
+        guard model.isArtworkExpanded else { return }
+
+        artworkTransitionID = UUID()
+        withAnimation(.smooth(duration: 0.30, extraBounce: 0)) {
+            model.isArtworkExpanded = false
+        }
+
+        wallpaperManager.restoreAnimated()
+    }
 }

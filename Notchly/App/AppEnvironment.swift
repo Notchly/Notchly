@@ -31,6 +31,7 @@ final class AppEnvironment {
     let codexHookIntegrationManager = CodexHookIntegrationManager()
     let cursorHookIntegrationManager = CursorHookIntegrationManager()
     let lockScreenOverlayModel = LockScreenOverlayModel()
+    let lockScreenWallpaperManager = LockScreenWallpaperManager()
 
     let updaterController = SPUStandardUpdaterController(
         startingUpdater: false,

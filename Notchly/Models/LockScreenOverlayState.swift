@@ -15,4 +15,5 @@ enum LockScreenOverlayState: Equatable {
 @MainActor
 final class LockScreenOverlayModel: ObservableObject {
     @Published var state: LockScreenOverlayState = .music
+    @Published var isArtworkExpanded = false
 }

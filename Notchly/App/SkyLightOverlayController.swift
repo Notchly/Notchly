@@ -72,6 +72,7 @@ final class SkyLightOverlayController {
         islandWindowController = nil
         lockScreenWindowController?.close()
         lockScreenWindowController = nil
+        environment.lockScreenOverlayModel.isArtworkExpanded = false
         currentScreenID = nil
         currentScreen = nil
     }
@@ -168,6 +169,8 @@ final class SkyLightOverlayController {
 
         case .music:
             if lockScreenWindowController == nil {
+                environment.lockScreenOverlayModel.isArtworkExpanded = false
+                environment.lockScreenWallpaperManager.restore()
                 showIslandWindow(on: screen)
             } else {
                 scheduleLockScreenWindowCloseAfterUnlock(on: screen)
@@ -195,22 +198,39 @@ final class SkyLightOverlayController {
     private func showLockScreenWindow(on screen: NSScreen) {
         guard lockScreenWindowController == nil else { return }
 
+        environment.lockScreenOverlayModel.isArtworkExpanded = false
+
         let windowFrame = lockScreenWindowFrame(for: screen)
         let playerYPosition = lockScreenPlayerYPosition(for: screen)
+        let expandedArtworkSize = lockScreenArtworkSize(for: screen)
         let view = AnyView(
             LockScreenOverlayRootView(
                 model: environment.lockScreenOverlayModel,
                 settingsManager: environment.settingsManager,
                 musicManager: environment.musicManager,
+                wallpaperManager: environment.lockScreenWallpaperManager,
+                wallpaperScreen: screen,
                 screenSize: windowFrame.size,
                 lockScreenPlayerYPosition: playerYPosition,
+                expandedArtworkSize: expandedArtworkSize,
                 initialClosedHeight: IslandHeightResolver.closedHeight(for: screen)
             )
         )
 
         lockScreenWindowController = SkyLightOperator.shared.delegateView(view, toScreen: screen)
         lockScreenWindowController?.window?.setFrame(windowFrame, display: true)
+        configureTransparentLockScreenWindow(lockScreenWindowController?.window)
         configureOverlayWindow(lockScreenWindowController?.window)
+    }
+
+    private func configureTransparentLockScreenWindow(_ window: NSWindow?) {
+        guard let window else { return }
+
+        window.isOpaque = false
+        window.backgroundColor = .clear
+        window.hasShadow = false
+        window.contentView?.wantsLayer = true
+        window.contentView?.layer?.backgroundColor = NSColor.clear.cgColor
     }
 
     private func scheduleLockScreenWindowCloseAfterUnlock(on screen: NSScreen) {
@@ -221,6 +241,8 @@ final class SkyLightOverlayController {
             guard !Task.isCancelled else { return }
             guard self?.environment.lockScreenOverlayModel.state == .music else { return }
 
+            self?.environment.lockScreenOverlayModel.isArtworkExpanded = false
+            self?.environment.lockScreenWallpaperManager.restore()
             self?.lockScreenWindowController?.close()
             self?.lockScreenWindowController = nil
             self?.showIslandWindow(on: screen)
@@ -449,13 +471,26 @@ final class SkyLightOverlayController {
         min(max(screen.frame.height * 0.68, 500), screen.frame.height - 130)
     }
 
+    private func lockScreenArtworkSize(for screen: NSScreen) -> CGFloat {
+        let playerTop = lockScreenPlayerYPosition(for: screen) - 77
+        let clockSafeArea = max(150, screen.frame.height * 0.25)
+        let availableHeight = max(playerTop - clockSafeArea - 18, 220)
+        let sizeForScreen = min(screen.frame.width * 0.34, screen.frame.height * 0.42)
+        return min(sizeForScreen, availableHeight, 540)
+    }
+
     private func lockScreenWindowFrame(for screen: NSScreen) -> NSRect {
         let playerYPosition = lockScreenPlayerYPosition(for: screen)
+        let artworkSize = lockScreenArtworkSize(for: screen)
         let playerHeight: CGFloat = 168
         let verticalPadding: CGFloat = 32
         let requiredHeight = playerYPosition + playerHeight / 2 + verticalPadding
         let height = min(screen.frame.height, max(280, requiredHeight))
-        let width = max(islandWindowSize.width, CGFloat(environment.settingsManager.islandWidth) + 40)
+        let width = max(
+            artworkSize + 48,
+            islandWindowSize.width,
+            CGFloat(environment.settingsManager.islandWidth) + 40
+        )
 
         return NSRect(
             x: screen.frame.midX - width / 2,

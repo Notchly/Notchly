@@ -29,6 +29,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         guard validateSingleRunningInstance() else { return }
+        environment.lockScreenWallpaperManager.recoverSynchronously()
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -66,6 +67,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         environment.brightnessManager.stop()
         lockScreenController.stop()
         overlayController.stop()
+        environment.lockScreenWallpaperManager.restoreSynchronously()
     }
 
     @discardableResult

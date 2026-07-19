@@ -31,6 +31,7 @@ final class MusicManager: ObservableObject {
     @MainActor @Published private(set) var sourceName: String = ""
     @MainActor @Published private(set) var currentSource: MusicSource = .none
     @MainActor @Published private(set) var artworkImage: NSImage?
+    @MainActor @Published private(set) var wallpaperArtworkImage: NSImage?
     @MainActor @Published private(set) var waveformColor: Color = .white
     @MainActor @Published private(set) var outputVolume: Double = 0.5
     @MainActor @Published private(set) var isOutputMuted: Bool = false
@@ -378,20 +379,27 @@ final class MusicManager: ObservableObject {
         artworkClearTask?.cancel()
         artworkClearTask = nil
 
-        guard displayedArtworkIdentity != trackIdentity || !artworkAvailable || artworkImage == nil else {
+        guard displayedArtworkIdentity != trackIdentity ||
+                !artworkAvailable ||
+                artworkImage == nil ||
+                wallpaperArtworkImage == nil else {
             return
         }
 
         let artworkPayload = autoreleasepool {
             let preparedArtwork = artwork.resizedForArtwork()
+            let wallpaperArtwork = artwork.resizedForArtwork(maxPixelSize: 1600)
             let color = preparedArtwork.averageColor?.boostedForWaveform
-            return (image: preparedArtwork, color: color)
+            return (image: preparedArtwork, wallpaperImage: wallpaperArtwork, color: color)
         }
 
         let preparedArtwork = artworkPayload.image
         displayedArtworkIdentity = trackIdentity
         if artworkImage !== preparedArtwork {
             artworkImage = preparedArtwork
+        }
+        if wallpaperArtworkImage !== artworkPayload.wallpaperImage {
+            wallpaperArtworkImage = artworkPayload.wallpaperImage
         }
         if !artworkAvailable {
             artworkAvailable = true
@@ -442,6 +450,9 @@ final class MusicManager: ObservableObject {
 
         if artworkImage != nil {
             artworkImage = nil
+        }
+        if wallpaperArtworkImage != nil {
+            wallpaperArtworkImage = nil
         }
         if artworkAvailable {
             artworkAvailable = false
