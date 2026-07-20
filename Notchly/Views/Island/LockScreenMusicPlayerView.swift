@@ -19,6 +19,7 @@ struct LockScreenMusicPlayerView: View {
 
     @State private var skipIndicator: String?
     @State private var skipIndicatorTask: Task<Void, Never>?
+    @State private var artworkTransitionDirection: LockScreenArtworkTransitionDirection = .forward
 
     private let playerWidth: CGFloat = 339 * 1.10
     private let playerHeight: CGFloat = 154 * 1.10
@@ -94,6 +95,7 @@ struct LockScreenMusicPlayerView: View {
             skipIndicator: skipIndicator,
             isArtworkExpanded: isArtworkExpanded,
             expandedArtworkSize: expandedArtworkSize,
+            artworkTransitionDirection: artworkTransitionDirection,
             onArtworkTap: {
                 guard musicManager.artworkImage != nil else { return }
                 onExpandArtwork()
@@ -116,11 +118,13 @@ struct LockScreenMusicPlayerView: View {
     }
 
     private func previousTrack() {
+        artworkTransitionDirection = .backward
         animateSkip(symbol: "backward.fill")
         musicManager.previousTrack()
     }
 
     private func nextTrack() {
+        artworkTransitionDirection = .forward
         animateSkip(symbol: "forward.fill")
         musicManager.nextTrack()
     }

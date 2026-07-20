@@ -10,8 +10,8 @@ import SwiftUI
 struct LockScreenOverlayRootView: View {
     @ObservedObject var model: LockScreenOverlayModel
     @ObservedObject var settingsManager: SettingsManager
+    @ObservedObject var musicManager: MusicManager
 
-    let musicManager: MusicManager
     let wallpaperManager: LockScreenWallpaperManager
     let wallpaperScreen: NSScreen
     let screenSize: CGSize
