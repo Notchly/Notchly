@@ -7,18 +7,69 @@
 
 import AppKit
 import Combine
+import Darwin
 import SwiftUI
 import SkyLightWindow
+
+private final class ManagedSpaceFullscreenDetector {
+    private typealias CopyManagedDisplaySpaces = @convention(c) (Int32) -> Unmanaged<CFArray>
+
+    private let frameworkHandle: UnsafeMutableRawPointer?
+    private let copyManagedDisplaySpaces: CopyManagedDisplaySpaces?
+
+    init() {
+        let handle = dlopen(
+            "/System/Library/PrivateFrameworks/SkyLight.framework/Versions/A/SkyLight",
+            RTLD_NOW
+        )
+        frameworkHandle = handle
+
+        if let handle,
+           let symbol = dlsym(handle, "SLSCopyManagedDisplaySpaces") {
+            copyManagedDisplaySpaces = unsafeBitCast(
+                symbol,
+                to: CopyManagedDisplaySpaces.self
+            )
+        } else {
+            copyManagedDisplaySpaces = nil
+        }
+    }
+
+    deinit {
+        if let frameworkHandle {
+            dlclose(frameworkHandle)
+        }
+    }
+
+    func isFullscreen(on displayID: CGDirectDisplayID, connection: Int32) -> Bool? {
+        guard let copyManagedDisplaySpaces,
+              let displayUUID = CGDisplayCreateUUIDFromDisplayID(displayID)?.takeRetainedValue(),
+              let displayIdentifier = CFUUIDCreateString(nil, displayUUID) as String?,
+              let managedDisplays = copyManagedDisplaySpaces(connection)
+                .takeRetainedValue() as? [[String: Any]],
+              let managedDisplay = managedDisplays.first(where: {
+                  ($0["Display Identifier"] as? String) == displayIdentifier
+              }),
+              let currentSpace = managedDisplay["Current Space"] as? [String: Any],
+              let spaceType = currentSpace["type"] as? NSNumber else {
+            return nil
+        }
+
+        return spaceType.intValue == 4
+    }
+}
 
 @MainActor
 final class SkyLightOverlayController {
     private let environment: AppEnvironment
+    private let managedSpaceFullscreenDetector = ManagedSpaceFullscreenDetector()
     private var islandWindowController: NSWindowController?
     private var lockScreenWindowController: NSWindowController?
     private var screenChangeObserver: NSObjectProtocol?
     private var screenRefreshTask: Task<Void, Never>?
     private var lockScreenWindowCloseTask: Task<Void, Never>?
     private var fullscreenRefreshTask: Task<Void, Never>?
+    private var fullscreenPollingTask: Task<Void, Never>?
     private var currentScreenID: CGDirectDisplayID?
     private var currentScreen: NSScreen?
     private var unlockedScreenFrames: [CGDirectDisplayID: NSRect] = [:]
@@ -49,6 +100,8 @@ final class SkyLightOverlayController {
         lockScreenWindowCloseTask = nil
         fullscreenRefreshTask?.cancel()
         fullscreenRefreshTask = nil
+        fullscreenPollingTask?.cancel()
+        fullscreenPollingTask = nil
         displayTargetCancellable?.cancel()
         displayTargetCancellable = nil
         hideWhenFullscreenCancellable?.cancel()
@@ -351,6 +404,8 @@ final class SkyLightOverlayController {
         guard shouldMonitor else {
             fullscreenRefreshTask?.cancel()
             fullscreenRefreshTask = nil
+            fullscreenPollingTask?.cancel()
+            fullscreenPollingTask = nil
             uninstallFullscreenObservers()
 
             if let screen = currentScreen ?? targetScreen() {
@@ -360,6 +415,7 @@ final class SkyLightOverlayController {
         }
 
         installFullscreenObserversIfNeeded()
+        startFullscreenPollingIfNeeded()
         scheduleFullscreenVisibilityRefresh()
     }
 
@@ -370,7 +426,7 @@ final class SkyLightOverlayController {
             return
         }
 
-        setIslandHiddenForFullscreen(isFullscreenAppActive(on: screen), on: screen)
+        setIslandHiddenForFullscreen(isFullscreenWindowVisible(on: screen), on: screen)
     }
 
     private func installFullscreenObserversIfNeeded() {
@@ -418,14 +474,27 @@ final class SkyLightOverlayController {
     private func scheduleFullscreenVisibilityRefresh() {
         fullscreenRefreshTask?.cancel()
 
-        // Debounce expensive CGWindowList queries so the overlay only reevaluates
-        // fullscreen visibility when macOS app/space state actually changes.
+        // Workspace events provide the fast path for native fullscreen transitions.
         fullscreenRefreshTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .milliseconds(120))
             guard !Task.isCancelled else { return }
 
             self?.evaluateFullscreenVisibility()
             self?.fullscreenRefreshTask = nil
+        }
+    }
+
+    private func startFullscreenPollingIfNeeded() {
+        guard fullscreenPollingTask == nil else { return }
+
+        // HTML5 video can enter fullscreen without activating another app or Space.
+        // A low-frequency fallback is the only permission-free way to catch it.
+        fullscreenPollingTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(500))
+                guard !Task.isCancelled else { return }
+                self?.evaluateFullscreenVisibility()
+            }
         }
     }
 
@@ -441,27 +510,40 @@ final class SkyLightOverlayController {
         }
     }
 
-    private func isFullscreenAppActive(on screen: NSScreen) -> Bool {
-        guard let frontmostApplication = NSWorkspace.shared.frontmostApplication,
-              frontmostApplication.processIdentifier != ProcessInfo.processInfo.processIdentifier else {
+    private func isFullscreenWindowVisible(on screen: NSScreen) -> Bool {
+        guard let displayID = displayID(for: screen) else {
             return false
         }
 
-        let targetPID = frontmostApplication.processIdentifier
-        let screenSize = screen.frame.size
+        if managedSpaceFullscreenDetector.isFullscreen(
+            on: displayID,
+            connection: SkyLightOperator.shared.connection
+        ) == true {
+            return true
+        }
+
+        let ownPID = ProcessInfo.processInfo.processIdentifier
+        let screenBounds = CGDisplayBounds(displayID).standardized
+        let edgeTolerance: CGFloat = 4
         let windowInfoList = CGWindowListCopyWindowInfo(
             [.optionOnScreenOnly, .excludeDesktopElements],
             kCGNullWindowID
         ) as? [[String: Any]]
 
         return windowInfoList?.contains { info in
-            guard windowOwnerPID(in: info) == targetPID,
+            guard let ownerPID = windowOwnerPID(in: info),
+                  ownerPID != ownPID,
                   (info[kCGWindowLayer as String] as? Int) == 0,
+                  (numericValue(info[kCGWindowAlpha as String]) ?? 1) > 0.01,
                   let bounds = windowBounds(in: info) else {
                 return false
             }
 
-            return bounds.width >= screenSize.width - 4 && bounds.height >= screenSize.height - 4
+            let windowBounds = bounds.standardized
+            return windowBounds.minX <= screenBounds.minX + edgeTolerance &&
+                windowBounds.maxX >= screenBounds.maxX - edgeTolerance &&
+                windowBounds.minY <= screenBounds.minY + edgeTolerance &&
+                windowBounds.maxY >= screenBounds.maxY - edgeTolerance
         } ?? false
     }
 
