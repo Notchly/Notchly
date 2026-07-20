@@ -8,7 +8,7 @@
 import Foundation
 
 struct WhatsNewRelease {
-    static let version = "1.1.6"
+    static let version = "1.2.0"
 
     struct Feature: Identifiable {
         let id: String
@@ -24,19 +24,29 @@ struct WhatsNewRelease {
             version: version,
             features: [
                 Feature(
-                    id: "lock-screen-player",
-                    title: "A richer Lock Screen player",
-                    description: "Enjoy expanded artwork, improved layouts, and more room for what is playing."
+                    id: "network-status",
+                    title: "Network status at a glance",
+                    description: "See when Wi-Fi connects, disconnects, or becomes unavailable directly in the island."
                 ),
                 Feature(
-                    id: "smoother-transitions",
-                    title: "Smoother transitions",
-                    description: "Lock, unlock, and artwork transitions now feel faster and more responsive."
+                    id: "personal-hotspot",
+                    title: "Personal Hotspot alerts",
+                    description: "Notchly now recognizes Personal Hotspot connections and lets you know when internet access is restored."
                 ),
                 Feature(
-                    id: "media-reliability",
-                    title: "More reliable media controls",
-                    description: "Notchly follows the active media source more accurately when several apps are open."
+                    id: "network-transitions",
+                    title: "Fluid island transitions",
+                    description: "Network alerts open and close through smooth states that stay coordinated with Music and other notifications."
+                ),
+                Feature(
+                    id: "network-setting",
+                    title: "You're in control",
+                    description: "Enable or disable network status notifications at any time from General Settings."
+                ),
+                Feature(
+                    id: "reliability",
+                    title: "Reliability improvements",
+                    description: "This update reduces unnecessary network activity and improves updates and unlock sound playback."
                 )
             ]
         )
