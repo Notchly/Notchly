@@ -79,6 +79,18 @@ struct IslandLayout {
         CGSize(width: closedSize.width * 0.5, height: closedHeight)
     }
 
+    var networkPreviewSize: CGSize {
+        musicPreviewSize
+    }
+
+    var networkIdleSize: CGSize {
+        idleSize
+    }
+
+    var networkClosedSize: CGSize {
+        closedSize
+    }
+
     var agentPreviewSize: CGSize {
         musicPreviewSize
     }
@@ -113,6 +125,12 @@ struct IslandLayout {
             return volumeCollapsedSize
         case .volumePreview:
             return volumePreviewSize
+        case .networkIdle:
+            return networkIdleSize
+        case .networkClosed:
+            return networkClosedSize
+        case .networkPreview:
+            return networkPreviewSize
         case .agentCollapse:
             return agentCollapsedSize
         case .agentPreview:
@@ -142,6 +160,12 @@ struct IslandLayout {
             return 8
         case .volumePreview:
             return 8
+        case .networkIdle:
+            return 8
+        case .networkClosed:
+            return 8
+        case .networkPreview:
+            return 24
         case .agentCollapse:
             return 8
         case .agentPreview:

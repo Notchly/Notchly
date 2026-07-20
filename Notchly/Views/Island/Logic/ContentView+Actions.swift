@@ -16,6 +16,7 @@ extension ContentView {
         hideFocusStatusPreview(animated: false)
         hideBrightnessStatusPreview(animated: false)
         hideVolumeStatusPreview(animated: false)
+        hideNetworkStatusPreview(animated: false)
         musicStartWidthTask?.cancel()
         musicStartWidthTask = nil
         musicStartUsesIdleWidth = false
@@ -60,6 +61,9 @@ extension ContentView {
         brightnessStatusTask = nil
         volumeStatusTask?.cancel()
         volumeStatusTask = nil
+        networkStatusTask?.cancel()
+        networkStatusTask = nil
+        networkWaitsForMusicCollapse = false
         agentDismissTask?.cancel()
         agentDismissTask = nil
         agentPresentationTask?.cancel()
@@ -88,6 +92,10 @@ extension ContentView {
         brightnessStatusTask = nil
         volumeStatusTask?.cancel()
         volumeStatusTask = nil
+        networkStatusTask?.cancel()
+        networkStatusTask = nil
+        networkWaitsForMusicCollapse = false
+        pendingNetworkEventTimestamp = nil
         musicStartWidthTask?.cancel()
         musicStartWidthTask = nil
         musicEndWidthTask?.cancel()
@@ -180,6 +188,7 @@ extension ContentView {
             }
 
             lockIslandTransitionTask = nil
+            playPendingNetworkEventIfReady()
         }
     }
 
@@ -342,6 +351,7 @@ extension ContentView {
     }
 
     func beginStandaloneAgentPresentation() {
+        dismissNetworkStatusBeforeCompetingEvent()
         autoExpandMusicTask?.cancel()
         focusStatusTask?.cancel()
         brightnessStatusTask?.cancel()
@@ -456,6 +466,7 @@ extension ContentView {
     func beginAgentMusicTransitionIfNeeded() {
         guard canShowAgentOverMusic else { return }
 
+        dismissNetworkStatusBeforeCompetingEvent()
         autoExpandMusicTask?.cancel()
         focusStatusTask?.cancel()
         brightnessStatusTask?.cancel()
@@ -774,6 +785,7 @@ extension ContentView {
     private func startFocusStatusAnimation(isActive: Bool) {
         guard !isAgentAlertBlockingOtherEvents else { return }
 
+        dismissNetworkStatusBeforeCompetingEvent()
         let collapseDuration = 0.34
 
         focusStatusTask?.cancel()
@@ -941,6 +953,7 @@ extension ContentView {
     private func startBrightnessStatusAnimation() {
         guard !isAgentAlertBlockingOtherEvents else { return }
 
+        dismissNetworkStatusBeforeCompetingEvent()
         let collapseDuration = 0.34
 
         if status == .brightnessCollapse {
@@ -1124,6 +1137,7 @@ extension ContentView {
     private func startVolumeStatusAnimation() {
         guard !isAgentAlertBlockingOtherEvents else { return }
 
+        dismissNetworkStatusBeforeCompetingEvent()
         let collapseDuration = 0.34
 
         if status == .volumeCollapse {
@@ -1318,5 +1332,182 @@ extension ContentView {
         } else {
             updates()
         }
+    }
+
+    func handleNetworkStatusEvent(_ event: NetworkStatusEvent) {
+        guard settingsManager.showNetworkStatus else { return }
+
+        if isPresentingNetworkStatus {
+            return
+        }
+
+        if status == .opened || status == .musicPreview {
+            stageNetworkStatusAfterMusicCollapse()
+            return
+        }
+
+        guard canShowNetworkStatusAnimation else {
+            pendingNetworkEventTimestamp = Date.timeIntervalSinceReferenceDate
+            return
+        }
+
+        pendingNetworkEventTimestamp = nil
+        startNetworkStatusAnimation(event)
+    }
+
+    var canShowNetworkStatusAnimation: Bool {
+        guard animationsEnabled else { return false }
+        guard lockScreenOverlayModel.state == .music else { return false }
+        guard !presentsLockIsland else { return false }
+        guard !isAgentAlertBlockingOtherEvents else { return false }
+        guard !networkWaitsForMusicCollapse else { return false }
+
+        switch status {
+        case .closed:
+            return true
+        case .opened, .musicPreview, .popping,
+             .focusCollapse, .focusPreview, .brightnessCollapse,
+             .brightnessPreview, .volumeCollapse, .volumePreview,
+             .networkIdle, .networkClosed, .networkPreview,
+             .agentCollapse, .agentPreview:
+            return false
+        }
+    }
+
+    func playPendingNetworkEventIfReady() {
+        guard let timestamp = pendingNetworkEventTimestamp else { return }
+
+        guard settingsManager.showNetworkStatus else {
+            pendingNetworkEventTimestamp = nil
+            return
+        }
+
+        guard Date.timeIntervalSinceReferenceDate - timestamp < 3 else {
+            pendingNetworkEventTimestamp = nil
+            return
+        }
+
+        guard canShowNetworkStatusAnimation,
+              let event = networkStatusManager.currentEvent else { return }
+
+        pendingNetworkEventTimestamp = nil
+        startNetworkStatusAnimation(event)
+    }
+
+    private func startNetworkStatusAnimation(_ event: NetworkStatusEvent) {
+        guard networkStatusManager.currentEvent == event else { return }
+        guard status == .closed else { return }
+
+        networkStatusTask?.cancel()
+        networkWaitsForMusicCollapse = false
+        autoExpandMusicTask?.cancel()
+        showMusicVolumeControl = false
+
+        let horizontalDuration = 0.34
+        let previewDuration = 0.42
+
+        withAnimation(.smooth(duration: horizontalDuration, extraBounce: 0)) {
+            status = .networkIdle
+        }
+
+        networkStatusTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(horizontalDuration))
+            guard !Task.isCancelled, status == .networkIdle else { return }
+
+            withAnimation(.smooth(duration: horizontalDuration, extraBounce: 0)) {
+                status = .networkClosed
+            }
+
+            try? await Task.sleep(for: .seconds(horizontalDuration))
+            guard !Task.isCancelled, status == .networkClosed else { return }
+
+            withAnimation(.smooth(duration: previewDuration, extraBounce: 0)) {
+                status = .networkPreview
+            }
+
+            try? await Task.sleep(for: .seconds(previewDuration))
+            guard !Task.isCancelled, status == .networkPreview else { return }
+
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled, status == .networkPreview else { return }
+
+            withAnimation(.smooth(duration: previewDuration, extraBounce: 0)) {
+                status = .networkClosed
+            }
+
+            try? await Task.sleep(for: .seconds(previewDuration))
+            guard !Task.isCancelled, status == .networkClosed else { return }
+
+            withAnimation(.smooth(duration: horizontalDuration, extraBounce: 0)) {
+                status = .networkIdle
+            }
+
+            try? await Task.sleep(for: .seconds(horizontalDuration))
+            guard !Task.isCancelled, status == .networkIdle else { return }
+
+            networkStatusTask = nil
+
+            withAnimation(.smooth(duration: 0.42, extraBounce: 0)) {
+                status = .closed
+            }
+        }
+    }
+
+    func hideNetworkStatusPreview(animated: Bool = true) {
+        networkStatusTask?.cancel()
+        networkStatusTask = nil
+        networkWaitsForMusicCollapse = false
+        pendingNetworkEventTimestamp = nil
+
+        guard isPresentingNetworkStatus else { return }
+
+        if animated {
+            withAnimation(.smooth(duration: 0.34, extraBounce: 0)) {
+                status = .closed
+            }
+        } else {
+            status = .closed
+        }
+    }
+
+    private func dismissNetworkStatusBeforeCompetingEvent() {
+        networkWaitsForMusicCollapse = false
+        guard isPresentingNetworkStatus else { return }
+        networkStatusTask?.cancel()
+        networkStatusTask = nil
+        status = .closed
+    }
+
+    private func stageNetworkStatusAfterMusicCollapse() {
+        pendingNetworkEventTimestamp = Date.timeIntervalSinceReferenceDate
+        networkStatusTask?.cancel()
+        autoExpandMusicTask?.cancel()
+        previewAutoCloseKey = ""
+        showMusicVolumeControl = false
+        networkWaitsForMusicCollapse = true
+
+        withAnimation(animation) {
+            status = .closed
+        }
+
+        networkStatusTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(500))
+            guard !Task.isCancelled else { return }
+            guard status == .closed else {
+                networkWaitsForMusicCollapse = false
+                networkStatusTask = nil
+                return
+            }
+
+            networkWaitsForMusicCollapse = false
+            networkStatusTask = nil
+            playPendingNetworkEventIfReady()
+        }
+    }
+
+    private var isPresentingNetworkStatus: Bool {
+        status == .networkIdle ||
+            status == .networkClosed ||
+            status == .networkPreview
     }
 }

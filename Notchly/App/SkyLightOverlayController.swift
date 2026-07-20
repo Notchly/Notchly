@@ -540,6 +540,7 @@ final class SkyLightOverlayController {
             musicManager: environment.musicManager,
             focusManager: environment.focusManager,
             brightnessManager: environment.brightnessManager,
+            networkStatusManager: environment.networkStatusManager,
             agentEventManager: environment.agentEventManager,
             lockScreenOverlayModel: environment.lockScreenOverlayModel,
             animationsEnabled: true,

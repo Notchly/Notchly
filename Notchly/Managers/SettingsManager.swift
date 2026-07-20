@@ -82,6 +82,7 @@ final class SettingsManager: ObservableObject {
         static let showSoundLine = true
         static let soundLineWidth = 36.0
         static let showSoundPercent = false
+        static let showNetworkStatus = true
         static let enableCodexApprovalAlertSound = false
         static let enableCodexCompletedAlertSound = false
         static let codexCompletedAlertDuration = 2.2
@@ -178,6 +179,10 @@ final class SettingsManager: ObservableObject {
         didSet { UserDefaults.standard.set(showSoundPercent, forKey: "showSoundPercent") }
     }
 
+    @Published var showNetworkStatus: Bool {
+        didSet { UserDefaults.standard.set(showNetworkStatus, forKey: "showNetworkStatus") }
+    }
+
     var brightnessDisplayStyle: StatusDisplayStyle {
         get { showBrightnessLine ? .line : .percent }
         set {
@@ -244,6 +249,7 @@ final class SettingsManager: ObservableObject {
         self.showSoundLine = UserDefaults.standard.object(forKey: "showSoundLine") as? Bool ?? Defaults.showSoundLine
         self.soundLineWidth = UserDefaults.standard.object(forKey: "soundLineWidth") as? Double ?? Defaults.soundLineWidth
         self.showSoundPercent = UserDefaults.standard.object(forKey: "showSoundPercent") as? Bool ?? Defaults.showSoundPercent
+        self.showNetworkStatus = UserDefaults.standard.object(forKey: "showNetworkStatus") as? Bool ?? Defaults.showNetworkStatus
         let legacyCodexAlertSound = UserDefaults.standard.object(forKey: "enableCodexAlertSound") as? Bool
         self.enableCodexApprovalAlertSound = UserDefaults.standard.object(forKey: "enableCodexApprovalAlertSound") as? Bool ?? legacyCodexAlertSound ?? Defaults.enableCodexApprovalAlertSound
         self.enableCodexCompletedAlertSound = UserDefaults.standard.object(forKey: "enableCodexCompletedAlertSound") as? Bool ?? legacyCodexAlertSound ?? Defaults.enableCodexCompletedAlertSound
@@ -262,6 +268,7 @@ final class SettingsManager: ObservableObject {
         launchAtLogin = Defaults.launchAtLogin
         enableLockSound = Defaults.enableLockSound
         hideNotchWhenFullscreen = Defaults.hideNotchWhenFullscreen
+        showNetworkStatus = Defaults.showNetworkStatus
     }
 
     func resetFocusSettings() {

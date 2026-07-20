@@ -5,43 +5,46 @@
 //  Created by n0xbyte on 03.04.2026.
 //
 
-import AppKit
+import AVFAudio
 import Foundation
 
 @MainActor
 final class UnlockSoundPlayer {
     static let shared = UnlockSoundPlayer()
 
-    private var sound: NSSound?
+    private var player: AVAudioPlayer?
     private var lastPlayDate: Date?
 
     private init() {
-        if let url = Bundle.main.url(forResource: "Unlock", withExtension: "aiff") {
-            sound = NSSound(contentsOf: url, byReference: true)
-        } else if let url = Bundle.main.url(forResource: "Unlock", withExtension: "wav") {
-            sound = NSSound(contentsOf: url, byReference: true)
-        } else if let url = Bundle.main.url(forResource: "Unlock", withExtension: "mp3") {
-            sound = NSSound(contentsOf: url, byReference: true)
-        }
+        let soundURL = ["aiff", "wav", "mp3"]
+            .lazy
+            .compactMap { Bundle.main.url(forResource: "Unlock", withExtension: $0) }
+            .first
 
-        sound?.volume = 0.15
+        guard let soundURL else { return }
+
+        player = try? AVAudioPlayer(contentsOf: soundURL)
+        player?.volume = 0.15
+        player?.prepareToPlay()
     }
 
     func play(bypassThrottle: Bool = false) {
-        guard let sound else { return }
+        guard let player else { return }
 
         let now = Date()
         if !bypassThrottle, let lastPlayDate, now.timeIntervalSince(lastPlayDate) < 0.5 {
             return
         }
 
-        if sound.isPlaying, !bypassThrottle {
-            return
+        if player.isPlaying {
+            guard bypassThrottle else { return }
+            player.stop()
         }
 
         lastPlayDate = now
-        sound.stop()
-        sound.volume = 0.15
-        sound.play()
+        player.currentTime = 0
+        player.volume = 0.15
+        player.prepareToPlay()
+        player.play()
     }
 }

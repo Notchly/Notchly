@@ -41,6 +41,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menuController.install()
         environment.agentEventManager.start()
         environment.musicManager.start()
+        environment.networkStatusManager.start()
         overlayController.show()
 
         startupTask?.cancel()
@@ -67,6 +68,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         environment.agentEventManager.stop()
         environment.focusManager.stop()
         environment.brightnessManager.stop()
+        environment.networkStatusManager.stop()
         lockScreenController.stop()
         overlayController.stop()
         environment.lockScreenWallpaperManager.restoreSynchronously()
