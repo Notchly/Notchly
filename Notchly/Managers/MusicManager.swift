@@ -32,6 +32,9 @@ final class MusicManager: ObservableObject {
     @MainActor @Published private(set) var currentSource: MusicSource = .none
     @MainActor @Published private(set) var artworkImage: NSImage?
     @MainActor @Published private(set) var wallpaperArtworkImage: NSImage?
+    @MainActor @Published private(set) var currentTrackIdentity: String = ""
+    @MainActor @Published private(set) var wallpaperArtworkIdentity: String = ""
+    @MainActor @Published private(set) var wallpaperArtworkRevision = 0
     @MainActor @Published private(set) var waveformColor: Color = .white
     @MainActor @Published private(set) var outputVolume: Double = 0.5
     @MainActor @Published private(set) var isOutputMuted: Bool = false
@@ -67,7 +70,6 @@ final class MusicManager: ObservableObject {
     private var baseSyncDate: Date?
     private var currentPlaybackRate: Double = 0
     private var isPreviewSeeking = false
-    private var currentTrackIdentity: String = ""
     private var displayedArtworkIdentity: String = ""
     private var pendingArtworkIdentity: String = ""
     private var currentPlayerBundleIdentifier: String = ""
@@ -451,6 +453,8 @@ final class MusicManager: ObservableObject {
         if wallpaperArtworkImage !== wallpaperArtwork {
             wallpaperArtworkImage = wallpaperArtwork
         }
+        wallpaperArtworkIdentity = trackIdentity
+        wallpaperArtworkRevision &+= 1
         if !artworkAvailable {
             artworkAvailable = true
         }
@@ -509,6 +513,8 @@ final class MusicManager: ObservableObject {
 
     @MainActor
     private func clearArtworkImmediately() {
+        let hadWallpaperArtwork = wallpaperArtworkImage != nil || !wallpaperArtworkIdentity.isEmpty
+
         artworkClearTask?.cancel()
         artworkClearTask = nil
         artworkProcessingState.invalidate()
@@ -519,6 +525,10 @@ final class MusicManager: ObservableObject {
         }
         if wallpaperArtworkImage != nil {
             wallpaperArtworkImage = nil
+        }
+        wallpaperArtworkIdentity = ""
+        if hadWallpaperArtwork {
+            wallpaperArtworkRevision &+= 1
         }
         if artworkAvailable {
             artworkAvailable = false

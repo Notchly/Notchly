@@ -113,17 +113,8 @@ struct LockScreenOverlayRootView: View {
         .onChange(of: model.state) { _, newValue in
             handleStateChange(newValue)
         }
-        .onChange(of: musicManager.artworkImage) { _, artworkImage in
-            guard let artworkImage,
-                  model.prefersExpandedArtwork,
-                  model.state == .locked else { return }
-            applyExpandedArtwork(artworkImage)
-        }
-        .onChange(of: musicManager.wallpaperArtworkImage) { _, artworkImage in
-            guard let artworkImage,
-                  model.prefersExpandedArtwork,
-                  model.state == .locked else { return }
-            applyExpandedArtwork(artworkImage)
+        .onChange(of: musicManager.wallpaperArtworkRevision) { _, _ in
+            handleWallpaperArtworkRevision()
         }
         .onChange(of: musicManager.hasNowPlayingContent) { _, hasNowPlayingContent in
             if !hasNowPlayingContent {
@@ -287,7 +278,27 @@ struct LockScreenOverlayRootView: View {
     private func restoreExpandedArtworkIfNeeded() {
         guard model.prefersExpandedArtwork,
               model.state == .locked,
+              musicManager.wallpaperArtworkIdentity == musicManager.currentTrackIdentity,
               let artwork = musicManager.wallpaperArtworkImage ?? musicManager.artworkImage else {
+            return
+        }
+
+        applyExpandedArtwork(artwork)
+    }
+
+    @MainActor
+    private func handleWallpaperArtworkRevision() {
+        guard model.prefersExpandedArtwork,
+              model.state == .locked else { return }
+
+        guard !musicManager.wallpaperArtworkIdentity.isEmpty,
+              musicManager.wallpaperArtworkIdentity == musicManager.currentTrackIdentity,
+              let artwork = musicManager.wallpaperArtworkImage else {
+            artworkTransitionID = UUID()
+            withAnimation(.smooth(duration: 0.24, extraBounce: 0)) {
+                model.isArtworkExpanded = false
+            }
+            wallpaperManager.restoreAnimated()
             return
         }
 

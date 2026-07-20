@@ -32,6 +32,7 @@ final class LockScreenWallpaperManager {
     private var originalWallpaper: OriginalWallpaper?
     private var activeArtworkURL: URL?
     private var cleanupTask: DispatchWorkItem?
+    private var restoreConfirmationTask: DispatchWorkItem?
     private var operationID = UUID()
 
     init() {
@@ -65,6 +66,8 @@ final class LockScreenWallpaperManager {
         on screen: NSScreen,
         onReadyToApply: @escaping @MainActor () -> Void = {}
     ) {
+        restoreConfirmationTask?.cancel()
+        restoreConfirmationTask = nil
         cleanupTask?.cancel()
         cleanupTask = nil
         operationID = UUID()
@@ -179,8 +182,11 @@ final class LockScreenWallpaperManager {
     }
 
     private func restoreOriginalWallpaper() {
+        restoreConfirmationTask?.cancel()
+        restoreConfirmationTask = nil
         operationID = UUID()
-        guard let originalWallpaper,
+        let currentOperationID = operationID
+        guard let originalWallpaper = originalWallpaper ?? recoveredOriginalWallpaper(),
               let targetScreen = screen(with: originalWallpaper.displayID) else { return }
 
         do {
@@ -189,13 +195,47 @@ final class LockScreenWallpaperManager {
                 for: targetScreen,
                 options: originalWallpaper.options
             )
-            self.originalWallpaper = nil
             activeArtworkURL = nil
-            try? fileManager.removeItem(at: recoveryURL)
-            scheduleGeneratedArtworkCleanup()
+
+            let confirmationTask = DispatchWorkItem { [weak self] in
+                guard let self, self.operationID == currentOperationID,
+                      let confirmationScreen = self.screen(with: originalWallpaper.displayID) else {
+                    return
+                }
+
+                do {
+                    try self.workspace.setDesktopImageURL(
+                        originalWallpaper.url,
+                        for: confirmationScreen,
+                        options: originalWallpaper.options
+                    )
+                    self.originalWallpaper = nil
+                    try? self.fileManager.removeItem(at: self.recoveryURL)
+                    self.scheduleGeneratedArtworkCleanup()
+                } catch {
+                    print("[LockScreenWallpaper] Restore confirmation failed: \(error)")
+                }
+                self.restoreConfirmationTask = nil
+            }
+            restoreConfirmationTask = confirmationTask
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.16, execute: confirmationTask)
         } catch {
             print("[LockScreenWallpaper] Restore failed: \(error)")
         }
+    }
+
+    private func recoveredOriginalWallpaper() -> OriginalWallpaper? {
+        guard let data = try? Data(contentsOf: recoveryURL),
+              let record = try? JSONDecoder().decode(RecoveryRecord.self, from: data),
+              let url = URL(string: record.url) else {
+            return nil
+        }
+
+        return OriginalWallpaper(
+            url: url,
+            options: [:],
+            displayID: record.displayID
+        )
     }
 
     private func cancelFailedApply(operationID failedOperationID: UUID) {
