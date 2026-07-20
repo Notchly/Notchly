@@ -36,6 +36,15 @@ extension ContentView {
         hidesMusicContentDuringAgentReturn = false
         isAgentMusicClosing = false
         idleNotchSizeSuppressed = false
+        lockIslandTransitionTask?.cancel()
+        lockIslandTransitionTask = nil
+        lockIslandWidth = lockIslandDestinationWidth
+        presentsLockIsland = lockScreenOverlayModel.state == .locked
+        showsOpenedLockIcon = false
+
+        if presentsLockIsland {
+            scheduleLockIslandExpansion()
+        }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
             hasFinishedInitialAppear = true
@@ -61,6 +70,117 @@ extension ContentView {
         musicStartWidthTask = nil
         musicEndWidthTask?.cancel()
         musicEndWidthTask = nil
+        lockIslandTransitionTask?.cancel()
+        lockIslandTransitionTask = nil
+    }
+
+    func handleLockScreenStateChange(_ state: LockScreenOverlayState) {
+        if state == .music {
+            beginLockIslandDismissal()
+            return
+        }
+
+        autoExpandMusicTask?.cancel()
+        autoExpandMusicTask = nil
+        focusStatusTask?.cancel()
+        focusStatusTask = nil
+        brightnessStatusTask?.cancel()
+        brightnessStatusTask = nil
+        volumeStatusTask?.cancel()
+        volumeStatusTask = nil
+        musicStartWidthTask?.cancel()
+        musicStartWidthTask = nil
+        musicEndWidthTask?.cancel()
+        musicEndWidthTask = nil
+
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            status = .closed
+            showChargingPop = false
+            showMusicVolumeControl = false
+            isHovered = false
+            isPointerInsideIsland = false
+            musicStartUsesIdleWidth = false
+            musicEndKeepsFullWidth = false
+            stagedMusicAutoOpenKey = ""
+            previewAutoCloseKey = ""
+            skipIndicator = nil
+        }
+
+        beginLockIslandPresentation()
+    }
+
+    var lockIslandDestinationWidth: CGFloat {
+        settingsManager.showMusic && musicManager.hasNowPlayingContent
+            ? configuredBaseIslandWidth
+            : configuredIdleIslandWidth
+    }
+
+    func beginLockIslandPresentation() {
+        lockIslandTransitionTask?.cancel()
+
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            lockIslandWidth = lockIslandDestinationWidth
+            showsOpenedLockIcon = false
+            presentsLockIsland = true
+        }
+
+        scheduleLockIslandExpansion()
+    }
+
+    func scheduleLockIslandExpansion() {
+        lockIslandTransitionTask?.cancel()
+
+        lockIslandTransitionTask = Task { @MainActor in
+            await Task.yield()
+            guard !Task.isCancelled,
+                  lockScreenOverlayModel.state == .locked else { return }
+
+            withAnimation(.smooth(
+                duration: LockScreenTransitionTiming.islandMorphDuration,
+                extraBounce: 0
+            )) {
+                lockIslandWidth = configuredBaseIslandWidth * 1.10
+            }
+
+            lockIslandTransitionTask = nil
+        }
+    }
+
+    func beginLockIslandDismissal() {
+        guard presentsLockIsland else { return }
+        lockIslandTransitionTask?.cancel()
+
+        withAnimation(.easeOut(duration: 0.10)) {
+            showsOpenedLockIcon = true
+        }
+
+        withAnimation(.smooth(
+            duration: LockScreenTransitionTiming.unlockMorphDuration,
+            extraBounce: 0
+        )) {
+            lockIslandWidth = lockIslandDestinationWidth
+        }
+
+        lockIslandTransitionTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(
+                LockScreenTransitionTiming.unlockMorphDuration
+            ))
+            guard !Task.isCancelled,
+                  lockScreenOverlayModel.state == .music else { return }
+
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                presentsLockIsland = false
+                showsOpenedLockIcon = false
+            }
+
+            lockIslandTransitionTask = nil
+        }
     }
 
     func handleHover(_ hovering: Bool) {

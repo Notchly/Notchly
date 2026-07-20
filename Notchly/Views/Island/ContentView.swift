@@ -75,6 +75,10 @@ struct ContentView: View {
     @State var musicEndWidthTask: Task<Void, Never>?
     @State var currentScreen: NSScreen?
     @State var resolvedClosedHeight: CGFloat = 36
+    @State var presentsLockIsland = false
+    @State var lockIslandWidth: CGFloat = 280
+    @State var showsOpenedLockIcon = false
+    @State var lockIslandTransitionTask: Task<Void, Never>?
     
     private func updateClosedHeight(for screen: NSScreen?) {
         guard lockScreenOverlayModel.state == .music else { return }
@@ -95,14 +99,24 @@ struct ContentView: View {
             Color.clear
                 .allowsHitTesting(false)
 
-            activeModuleView
-                .padding(.top, 0)
+            if presentsLockIsland {
+                LockScreenIslandView(
+                    islandWidth: lockIslandWidth,
+                    height: closedHeight,
+                    showOpenedLock: showsOpenedLockIcon
+                )
+                .allowsHitTesting(false)
                 .zIndex(10)
-                .scaleEffect(hoverScale)
-                .onHover { hovering in
-                    handleHover(hovering)
-                }
-                .animation(.easeInOut(duration: 0.22), value: settingsManager.showBattery)
+            } else {
+                activeModuleView
+                    .padding(.top, 0)
+                    .zIndex(10)
+                    .scaleEffect(hoverScale, anchor: .top)
+                    .onHover { hovering in
+                        handleHover(hovering)
+                    }
+                    .animation(.easeInOut(duration: 0.22), value: settingsManager.showBattery)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
@@ -142,6 +156,9 @@ struct ContentView: View {
             playPendingFocusEventIfReady()
             playPendingBrightnessEventIfReady()
             playPendingVolumeEventIfReady()
+        }
+        .onChange(of: lockScreenOverlayModel.state) { _, state in
+            handleLockScreenStateChange(state)
         }
         .onChange(of: status) { _, newValue in
             guard newValue != .opened else { return }

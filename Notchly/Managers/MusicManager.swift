@@ -50,6 +50,7 @@ final class MusicManager: ObservableObject {
     nonisolated private let mediaController = MediaController()
     private var progressTask: Task<Void, Never>?
     private var activeSourceRefreshTask: Task<Void, Never>?
+    private var nowPlayingTransitionRecoveryTask: Task<Void, Never>?
     private var pausedPlaybackValidationTask: Task<Void, Never>?
     private var artworkClearTask: Task<Void, Never>?
     private var startupTask: Task<Void, Never>?
@@ -143,6 +144,8 @@ final class MusicManager: ObservableObject {
         progressTask = nil
         activeSourceRefreshTask?.cancel()
         activeSourceRefreshTask = nil
+        nowPlayingTransitionRecoveryTask?.cancel()
+        nowPlayingTransitionRecoveryTask = nil
         pausedPlaybackValidationTask?.cancel()
         pausedPlaybackValidationTask = nil
         artworkClearTask?.cancel()
@@ -160,6 +163,7 @@ final class MusicManager: ObservableObject {
         startupTask?.cancel()
         progressTask?.cancel()
         activeSourceRefreshTask?.cancel()
+        nowPlayingTransitionRecoveryTask?.cancel()
         pausedPlaybackValidationTask?.cancel()
         artworkClearTask?.cancel()
         artworkProcessingState.invalidate()
@@ -207,11 +211,13 @@ final class MusicManager: ObservableObject {
             guard let self else { return }
 
             Task { @MainActor in
-                guard let trackInfo else {
-                    self.recoverActiveSourceOrClear(ignoring: self.currentPlayerBundleIdentifier)
+                guard let trackInfo,
+                      self.hasDisplayableMetadata(trackInfo.payload) else {
+                    self.scheduleNowPlayingTransitionRecovery()
                     return
                 }
 
+                self.cancelNowPlayingTransitionRecovery()
                 self.apply(trackInfo)
             }
         }
@@ -227,6 +233,8 @@ final class MusicManager: ObservableObject {
 
     @MainActor
     private func apply(_ trackInfo: TrackInfo, allowsPausedSourceLookup: Bool = true) {
+        cancelNowPlayingTransitionRecovery()
+
         let payload = trackInfo.payload
 
         let newTrackTitle = payload.title ?? ""
@@ -814,6 +822,8 @@ final class MusicManager: ObservableObject {
 
     @MainActor
     private func clearPlaybackState() {
+        cancelNowPlayingTransitionRecovery()
+
         if isPlaying {
             isPlaying = false
         }
@@ -928,12 +938,79 @@ final class MusicManager: ObservableObject {
 
     @MainActor
     private func recoverActiveSourceOrClear(ignoring ignoredBundleIdentifier: String) {
+        cancelNowPlayingTransitionRecovery()
         scheduleActiveSourceRefresh(
             ignoring: ignoredBundleIdentifier,
             fallbackPausedTrackInfo: nil,
             clearsCurrentIfNoActiveSource: true,
             force: true
         )
+    }
+
+    @MainActor
+    private func scheduleNowPlayingTransitionRecovery() {
+        nowPlayingTransitionRecoveryTask?.cancel()
+
+        guard hasNowPlayingContent else {
+            recoverActiveSourceOrClear(ignoring: "")
+            return
+        }
+
+        isResolvingNowPlaying = true
+
+        let expectedTrackIdentity = currentTrackIdentity
+        let expectedBundleIdentifier = currentPlayerBundleIdentifier
+        let retryDelays = [80, 180, 320, 520]
+
+        nowPlayingTransitionRecoveryTask = Task { [weak self] in
+            for delay in retryDelays {
+                try? await Task.sleep(for: .milliseconds(delay))
+                guard !Task.isCancelled, let self else { return }
+
+                var recoveredTrackInfo: TrackInfo?
+                if !expectedBundleIdentifier.isEmpty {
+                    recoveredTrackInfo = await self.fetchTrackInfo(for: expectedBundleIdentifier)
+                }
+
+                if recoveredTrackInfo.map({ self.hasDisplayableMetadata($0.payload) }) != true {
+                    recoveredTrackInfo = await self.fetchCurrentTrackInfo()
+                }
+
+                guard let recoveredTrackInfo,
+                      self.hasDisplayableMetadata(recoveredTrackInfo.payload) else {
+                    continue
+                }
+
+                await MainActor.run { [weak self] in
+                    guard let self, !Task.isCancelled else { return }
+                    guard self.currentTrackIdentity == expectedTrackIdentity else { return }
+
+                    self.nowPlayingTransitionRecoveryTask = nil
+                    self.apply(recoveredTrackInfo, allowsPausedSourceLookup: false)
+                }
+                return
+            }
+
+            await MainActor.run { [weak self] in
+                guard let self, !Task.isCancelled else { return }
+                guard self.currentTrackIdentity == expectedTrackIdentity else { return }
+
+                self.nowPlayingTransitionRecoveryTask = nil
+                self.recoverActiveSourceOrClear(ignoring: "")
+            }
+        }
+    }
+
+    @MainActor
+    private func cancelNowPlayingTransitionRecovery() {
+        nowPlayingTransitionRecoveryTask?.cancel()
+        nowPlayingTransitionRecoveryTask = nil
+    }
+
+    private nonisolated func hasDisplayableMetadata(_ payload: TrackInfo.Payload) -> Bool {
+        [payload.title, payload.artist, payload.album]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .contains { !$0.isEmpty }
     }
 
     private func fetchFirstPlayingTrackInfo(ignoring ignoredBundleIdentifier: String) async -> TrackInfo? {

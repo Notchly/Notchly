@@ -21,7 +21,7 @@ final class LockScreenWallpaperManager {
     }
 
     private let workspace = NSWorkspace.shared
-    private let renderer = LockScreenBackdropRenderer(maximumSide: 1280)
+    private let renderer = LockScreenBackdropRenderer(maximumSide: 2560)
     private let renderQueue = DispatchQueue(
         label: "xyz.notchly.lock-screen-wallpaper",
         qos: .userInitiated
@@ -98,7 +98,11 @@ final class LockScreenWallpaperManager {
 
             let artworkURL = workingDirectoryURL
                 .appendingPathComponent("artwork-\(UUID().uuidString).jpg")
-            let targetSize = screen.frame.size
+            let backingScale = max(screen.backingScaleFactor, 1)
+            let targetSize = CGSize(
+                width: screen.frame.width * backingScale,
+                height: screen.frame.height * backingScale
+            )
             let targetDisplayID = displayID(for: screen)
             let renderer = renderer
 
@@ -136,7 +140,7 @@ final class LockScreenWallpaperManager {
                     }
 
                     var options = self.workspace.desktopImageOptions(for: targetScreen) ?? [:]
-                    options[.imageScaling] = NSImageScaling.scaleAxesIndependently.rawValue
+                    options[.imageScaling] = NSImageScaling.scaleProportionallyUpOrDown.rawValue
                     options[.allowClipping] = true
 
                     onReadyToApply()
@@ -251,8 +255,14 @@ final class LockScreenWallpaperManager {
 }
 
 private nonisolated final class LockScreenBackdropRenderer: @unchecked Sendable {
+    private static let outputColorSpace = CGColorSpace(name: CGColorSpace.sRGB)!
+
     private let maximumSide: CGFloat
-    private let context = CIContext(options: [.cacheIntermediates: false])
+    private let context = CIContext(options: [
+        .cacheIntermediates: false,
+        .workingColorSpace: outputColorSpace,
+        .outputColorSpace: outputColorSpace
+    ])
 
     init(maximumSide: CGFloat) {
         self.maximumSide = maximumSide
@@ -264,7 +274,12 @@ private nonisolated final class LockScreenBackdropRenderer: @unchecked Sendable 
             targetSize: targetSize,
             maximumSide: maximumSide
         )
-        guard let outputImage = context.createCGImage(composition.image, from: composition.extent),
+        guard let outputImage = context.createCGImage(
+            composition.image,
+            from: composition.extent,
+            format: .RGBA8,
+            colorSpace: Self.outputColorSpace
+        ),
               let destinationData = CFDataCreateMutable(nil, 0),
               let destination = CGImageDestinationCreateWithData(
                 destinationData,
@@ -275,7 +290,7 @@ private nonisolated final class LockScreenBackdropRenderer: @unchecked Sendable 
             return nil
         }
 
-        let properties = [kCGImageDestinationLossyCompressionQuality: 0.88] as CFDictionary
+        let properties = [kCGImageDestinationLossyCompressionQuality: 0.92] as CFDictionary
         CGImageDestinationAddImage(destination, outputImage, properties)
         guard CGImageDestinationFinalize(destination) else { return nil }
         return destinationData as Data
@@ -315,12 +330,13 @@ private nonisolated struct LockScreenBackdropComposition {
             .applyingFilter(
                 "CIColorControls",
                 parameters: [
-                    kCIInputSaturationKey: 1.14,
-                    kCIInputBrightnessKey: -0.08,
-                    kCIInputContrastKey: 1.04
+                    kCIInputSaturationKey: 0.96,
+                    kCIInputBrightnessKey: -0.05,
+                    kCIInputContrastKey: 0.98
                 ]
             )
-        let dimmingLayer = CIImage(color: CIColor(red: 0, green: 0, blue: 0, alpha: 0.20))
+            .applyingFilter("CIVibrance", parameters: ["inputAmount": -0.10])
+        let dimmingLayer = CIImage(color: CIColor(red: 0, green: 0, blue: 0, alpha: 0.18))
             .cropped(to: extent)
 
         self.image = dimmingLayer.composited(over: backdrop)

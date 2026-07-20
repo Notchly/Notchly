@@ -319,6 +319,7 @@ extension ContentView {
     }
 
     func handleMusicAutoExpand(isPlaying: Bool) {
+        guard lockScreenOverlayModel.state == .music else { return }
         guard !isAgentAlertBlockingOtherEvents else { return }
         guard dynamicManager.currentModule == .music || musicManager.hasNowPlayingContent else { return }
         guard isPlaying else { return }
@@ -365,6 +366,7 @@ extension ContentView {
     }
 
     func openMusicPreview(for key: String) {
+        guard lockScreenOverlayModel.state == .music else { return }
         lastMusicAutoOpenKey = key
         stagedMusicAutoOpenKey = ""
         autoExpandMusicTask?.cancel()

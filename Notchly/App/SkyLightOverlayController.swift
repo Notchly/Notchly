@@ -21,13 +21,16 @@ final class SkyLightOverlayController {
     private var fullscreenRefreshTask: Task<Void, Never>?
     private var currentScreenID: CGDirectDisplayID?
     private var currentScreen: NSScreen?
+    private var unlockedScreenFrames: [CGDirectDisplayID: NSRect] = [:]
     private var currentClosedHeight = IslandHeightResolver.fallbackHeight
     private var displayTargetCancellable: AnyCancellable?
     private var hideWhenFullscreenCancellable: AnyCancellable?
     private var lockStateCancellable: AnyCancellable?
+    private var musicContentCancellable: AnyCancellable?
     private var workspaceActivationObserver: NSObjectProtocol?
     private var activeSpaceObserver: NSObjectProtocol?
     private var isIslandHiddenForFullscreen = false
+    private var lockScreenWindowIsInteractive: Bool?
 
     init(environment: AppEnvironment) {
         self.environment = environment
@@ -52,6 +55,8 @@ final class SkyLightOverlayController {
         hideWhenFullscreenCancellable = nil
         lockStateCancellable?.cancel()
         lockStateCancellable = nil
+        musicContentCancellable?.cancel()
+        musicContentCancellable = nil
         isIslandHiddenForFullscreen = false
 
         if let screenChangeObserver {
@@ -73,9 +78,11 @@ final class SkyLightOverlayController {
         islandWindowController = nil
         lockScreenWindowController?.close()
         lockScreenWindowController = nil
+        lockScreenWindowIsInteractive = nil
         environment.lockScreenOverlayModel.isArtworkExpanded = false
         currentScreenID = nil
         currentScreen = nil
+        unlockedScreenFrames.removeAll()
         currentClosedHeight = IslandHeightResolver.fallbackHeight
     }
 
@@ -122,6 +129,14 @@ final class SkyLightOverlayController {
                     self?.updateFullscreenMonitoring()
                 }
             }
+
+        musicContentCancellable = environment.musicManager.objectWillChange
+            .sink { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    await Task.yield()
+                    self?.refreshLockScreenWindowForMusicContent()
+                }
+            }
     }
 
     private func scheduleOverlayScreenRefresh() {
@@ -144,20 +159,25 @@ final class SkyLightOverlayController {
         let screenID = displayID(for: screen)
         let didChangeDisplay = currentScreenID != screenID
 
+        if environment.lockScreenOverlayModel.state == .music,
+           let screenID {
+            unlockedScreenFrames[screenID] = screen.frame
+        }
+
         if !force, islandWindowController != nil, !didChangeDisplay {
             currentScreen = screen
             updateIslandWindowFrame(on: screen)
 
             if environment.lockScreenOverlayModel.state == .locked,
-               let lockScreenWindow = lockScreenWindowController?.window,
-               !framesMatchOnBackingGrid(
-                   lockScreenWindow.frame,
-                   lockScreenWindowFrame(for: screen),
-                   scale: screen.backingScaleFactor
-               ) {
-                lockScreenWindowController?.close()
-                lockScreenWindowController = nil
-                showLockScreenWindow(on: screen)
+               let lockScreenWindow = lockScreenWindowController?.window {
+                let nextFrame = lockScreenWindowFrame(for: screen)
+                if !framesMatchOnBackingGrid(
+                    lockScreenWindow.frame,
+                    nextFrame,
+                    scale: screen.backingScaleFactor
+                ) {
+                    lockScreenWindow.setFrame(nextFrame, display: true)
+                }
             }
 
             return
@@ -167,6 +187,7 @@ final class SkyLightOverlayController {
         islandWindowController = nil
         lockScreenWindowController?.close()
         lockScreenWindowController = nil
+        lockScreenWindowIsInteractive = nil
         lockScreenWindowCloseTask?.cancel()
         lockScreenWindowCloseTask = nil
 
@@ -186,15 +207,19 @@ final class SkyLightOverlayController {
             lockScreenWindowCloseTask?.cancel()
             lockScreenWindowCloseTask = nil
             setIslandHiddenForFullscreen(false, on: screen)
-            keepIslandWindowVisibleBehindLock()
+            showIslandWindow(on: screen)
             showLockScreenWindow(on: screen)
+            lockScreenWindowController?.window?.ignoresMouseEvents =
+                !(lockScreenWindowIsInteractive ?? false)
 
         case .music:
+            lockScreenWindowController?.window?.ignoresMouseEvents = true
             if lockScreenWindowController == nil {
                 environment.lockScreenOverlayModel.isArtworkExpanded = false
                 environment.lockScreenWallpaperManager.restore()
                 showIslandWindow(on: screen)
             } else {
+                showIslandWindow(on: screen)
                 scheduleLockScreenWindowCloseAfterUnlock()
             }
         }
@@ -213,15 +238,12 @@ final class SkyLightOverlayController {
         }
     }
 
-    private func keepIslandWindowVisibleBehindLock() {
-        islandWindowController?.window?.orderFrontRegardless()
-    }
-
     private func showLockScreenWindow(on screen: NSScreen) {
         guard lockScreenWindowController == nil else { return }
 
         environment.lockScreenOverlayModel.isArtworkExpanded = false
 
+        let isInteractive = settingsManagerAllowsLockScreenPlayer
         let windowFrame = lockScreenWindowFrame(for: screen)
         let playerYPosition = lockScreenPlayerYPosition(for: screen)
         let expandedArtworkSize = lockScreenArtworkSize(for: screen)
@@ -234,8 +256,7 @@ final class SkyLightOverlayController {
                 wallpaperScreen: screen,
                 screenSize: windowFrame.size,
                 lockScreenPlayerYPosition: playerYPosition,
-                expandedArtworkSize: expandedArtworkSize,
-                initialClosedHeight: currentClosedHeight
+                expandedArtworkSize: expandedArtworkSize
             )
         )
 
@@ -255,13 +276,36 @@ final class SkyLightOverlayController {
             .ignoresCycle,
         ]
         window.canBecomeVisibleWithoutLogin = true
+        window.ignoresMouseEvents = !isInteractive
         window.contentViewController = NSHostingController(rootView: view)
         configureTransparentLockScreenWindow(window)
         configureOverlayWindow(window)
         SkyLightOperator.shared.delegateWindow(window)
+        window.setFrame(windowFrame, display: true)
 
         lockScreenWindowController = NSWindowController(window: window)
+        lockScreenWindowIsInteractive = isInteractive
         window.orderFrontRegardless()
+        window.setFrame(windowFrame, display: true)
+    }
+
+    private var settingsManagerAllowsLockScreenPlayer: Bool {
+        environment.settingsManager.showMusic && environment.musicManager.hasNowPlayingContent
+    }
+
+    private func refreshLockScreenWindowForMusicContent() {
+        guard environment.lockScreenOverlayModel.state == .locked,
+              let screen = screenForCurrentDisplay() else {
+            return
+        }
+
+        let shouldBeInteractive = settingsManagerAllowsLockScreenPlayer
+        guard lockScreenWindowIsInteractive != shouldBeInteractive else { return }
+
+        lockScreenWindowController?.close()
+        lockScreenWindowController = nil
+        lockScreenWindowIsInteractive = nil
+        showLockScreenWindow(on: screen)
     }
 
     private func configureTransparentLockScreenWindow(_ window: NSWindow?) {
@@ -278,7 +322,9 @@ final class SkyLightOverlayController {
         lockScreenWindowCloseTask?.cancel()
 
         lockScreenWindowCloseTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .milliseconds(190))
+            try? await Task.sleep(for: .milliseconds(
+                LockScreenTransitionTiming.windowCloseDelayMilliseconds
+            ))
             guard !Task.isCancelled else { return }
             guard let self,
                   self.environment.lockScreenOverlayModel.state == .music,
@@ -291,6 +337,7 @@ final class SkyLightOverlayController {
             self.environment.lockScreenWallpaperManager.restore()
             self.lockScreenWindowController?.close()
             self.lockScreenWindowController = nil
+            self.lockScreenWindowIsInteractive = nil
             self.showIslandWindow(on: screen)
             self.updateFullscreenMonitoring()
             self.lockScreenWindowCloseTask = nil
@@ -541,12 +588,18 @@ final class SkyLightOverlayController {
     }
 
     private func lockScreenWindowFrame(for screen: NSScreen) -> NSRect {
+        let positioningFrame = stableUnlockedFrame(for: screen)
         let playerYPosition = lockScreenPlayerYPosition(for: screen)
         let artworkSize = lockScreenArtworkSize(for: screen)
         let expandedPlayerShift: CGFloat = 18
         let playerScale: CGFloat = 1.10
         let playerWidth: CGFloat = 339 * playerScale
         let playerHeight: CGFloat = 154 * playerScale
+        let configuredIslandWidth = min(
+            max(CGFloat(environment.settingsManager.islandWidth), 280),
+            360
+        )
+        let lockedIslandWidth = configuredIslandWidth * 1.10 + 16
         let lowerPlayerOffset = playerHeight * 0.10
         let displayedArtworkSize = (artworkSize + expandedPlayerShift) * 1.05
         let expandedCompositionOffset = displayedArtworkSize * 0.10
@@ -559,22 +612,28 @@ final class SkyLightOverlayController {
             displayedArtworkSize + 48,
             playerWidth + 32,
             islandWindowSize.width,
-            CGFloat(environment.settingsManager.islandWidth) + 40
+            lockedIslandWidth
         )
 
         let frame = NSRect(
-            x: screen.frame.midX - width / 2,
-            y: screen.frame.maxY - height,
+            x: positioningFrame.midX - width / 2,
+            y: positioningFrame.maxY - height,
             width: width,
             height: height
         )
         return alignedToBackingPixelGrid(frame, scale: screen.backingScaleFactor)
     }
 
+    private func stableUnlockedFrame(for screen: NSScreen) -> NSRect {
+        guard let screenID = displayID(for: screen) else { return screen.frame }
+        return unlockedScreenFrames[screenID] ?? screen.frame
+    }
+
     private func islandWindowFrame(for screen: NSScreen, size: CGSize) -> NSRect {
+        let positioningFrame = stableUnlockedFrame(for: screen)
         let frame = NSRect(
-            x: screen.frame.midX - size.width / 2,
-            y: screen.frame.maxY - size.height,
+            x: positioningFrame.midX - size.width / 2,
+            y: positioningFrame.maxY - size.height,
             width: size.width,
             height: size.height
         )
