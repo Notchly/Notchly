@@ -21,6 +21,11 @@ enum PlaybackState: Equatable {
     case loading
 }
 
+enum LockScreenArtworkTransitionDirection: Equatable {
+    case backward
+    case forward
+}
+
 struct LockScreenMusicView: View {
     private let playerScale: CGFloat = 1.10
 
@@ -38,6 +43,7 @@ struct LockScreenMusicView: View {
     let skipIndicator: String?
     let isArtworkExpanded: Bool
     let expandedArtworkSize: CGFloat
+    let artworkTransitionDirection: LockScreenArtworkTransitionDirection
 
     let onArtworkTap: (() -> Void)?
     let onCollapseArtwork: (() -> Void)?
@@ -68,6 +74,7 @@ struct LockScreenMusicView: View {
         skipIndicator: String? = nil,
         isArtworkExpanded: Bool = false,
         expandedArtworkSize: CGFloat = 339,
+        artworkTransitionDirection: LockScreenArtworkTransitionDirection = .forward,
         onArtworkTap: (() -> Void)? = nil,
         onCollapseArtwork: (() -> Void)? = nil,
         onTogglePlayback: @escaping () -> Void,
@@ -92,6 +99,7 @@ struct LockScreenMusicView: View {
         self.skipIndicator = skipIndicator
         self.isArtworkExpanded = isArtworkExpanded
         self.expandedArtworkSize = expandedArtworkSize
+        self.artworkTransitionDirection = artworkTransitionDirection
         self.onArtworkTap = onArtworkTap
         self.onCollapseArtwork = onCollapseArtwork
         self.onTogglePlayback = onTogglePlayback
@@ -284,23 +292,42 @@ struct LockScreenMusicView: View {
            let artwork = track.artwork,
            let onCollapseArtwork {
             Button(action: onCollapseArtwork) {
-                Image(nsImage: artwork)
-                    .resizable()
-                    .interpolation(.high)
-                    .antialiased(true)
-                    .scaledToFill()
-                    .frame(width: expandedArtworkSize, height: expandedArtworkSize)
-                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 24, style: .continuous)
-                            .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
-                    }
-                    .matchedGeometryEffect(id: "lock-screen-artwork", in: artworkNamespace)
-                    .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                ZStack {
+                    Image(nsImage: artwork)
+                        .resizable()
+                        .interpolation(.high)
+                        .antialiased(true)
+                        .scaledToFill()
+                        .frame(width: expandedArtworkSize, height: expandedArtworkSize)
+                        .id(track.id)
+                        .transition(expandedArtworkTrackTransition)
+                }
+                .frame(width: expandedArtworkSize, height: expandedArtworkSize)
+                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
+                }
+                .matchedGeometryEffect(id: "lock-screen-artwork", in: artworkNamespace)
+                .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .animation(
+                    reduceMotion ? nil : .smooth(duration: 0.28, extraBounce: 0),
+                    value: track.id
+                )
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Collapse \(title) artwork")
         }
+    }
+
+    private var expandedArtworkTrackTransition: AnyTransition {
+        let distance = expandedArtworkSize * 0.45
+        let insertionOffset = artworkTransitionDirection == .forward ? distance : -distance
+
+        return .asymmetric(
+            insertion: .offset(x: insertionOffset).combined(with: .opacity),
+            removal: .offset(x: -insertionOffset).combined(with: .opacity)
+        )
     }
 }
 

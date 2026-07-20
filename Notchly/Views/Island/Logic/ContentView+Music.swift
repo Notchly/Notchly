@@ -122,6 +122,19 @@ extension ContentView {
                 .zIndex(4)
             }
 
+            if status == .networkClosed || status == .networkPreview {
+                NetworkStatusView(
+                    event: networkStatusManager.currentEvent,
+                    size: status == .networkPreview
+                        ? layout.networkPreviewSize
+                        : layout.networkClosedSize,
+                    isExpanded: status == .networkPreview
+                )
+                .offset(y: 10)
+                .transition(.opacity.combined(with: .offset(y: 6)))
+                .zIndex(4)
+            }
+
             if !hidesMusicContentDuringAgentReturn && status == .opened {
                 ExpandedMusicView(
                     artwork: musicManager.artworkImage,
@@ -246,6 +259,9 @@ extension ContentView {
         guard status != .brightnessCollapse else { return }
         guard status != .volumePreview else { return }
         guard status != .volumeCollapse else { return }
+        guard status != .networkPreview else { return }
+        guard status != .networkClosed else { return }
+        guard status != .networkIdle else { return }
 
         let horizontalTriggerThreshold: CGFloat = 14
         let verticalTriggerThreshold: CGFloat = 8
@@ -319,6 +335,7 @@ extension ContentView {
     }
 
     func handleMusicAutoExpand(isPlaying: Bool) {
+        guard lockScreenOverlayModel.state == .music else { return }
         guard !isAgentAlertBlockingOtherEvents else { return }
         guard dynamicManager.currentModule == .music || musicManager.hasNowPlayingContent else { return }
         guard isPlaying else { return }
@@ -365,6 +382,7 @@ extension ContentView {
     }
 
     func openMusicPreview(for key: String) {
+        guard lockScreenOverlayModel.state == .music else { return }
         lastMusicAutoOpenKey = key
         stagedMusicAutoOpenKey = ""
         autoExpandMusicTask?.cancel()

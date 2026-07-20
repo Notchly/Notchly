@@ -53,7 +53,10 @@ extension ContentView {
                 status == .brightnessCollapse ||
                 status == .brightnessPreview ||
                 status == .volumeCollapse ||
-                status == .volumePreview {
+                status == .volumePreview ||
+                status == .networkIdle ||
+                status == .networkClosed ||
+                status == .networkPreview {
                 musicContainer
             } else if settingsManager.showMusic &&
                 musicManager.hasNowPlayingContent &&
@@ -97,7 +100,7 @@ extension ContentView {
         switch status {
         case .opened, .musicPreview, .agentCollapse, .agentPreview:
             return true
-        case .closed, .popping, .focusCollapse, .focusPreview, .brightnessCollapse, .brightnessPreview, .volumeCollapse, .volumePreview:
+        case .closed, .popping, .focusCollapse, .focusPreview, .brightnessCollapse, .brightnessPreview, .volumeCollapse, .volumePreview, .networkIdle, .networkClosed, .networkPreview:
             return false
         }
     }
@@ -110,7 +113,7 @@ extension ContentView {
         switch status {
         case .closed, .opened, .musicPreview:
             return true
-        case .popping, .focusCollapse, .focusPreview, .brightnessCollapse, .brightnessPreview, .volumeCollapse, .volumePreview, .agentCollapse, .agentPreview:
+        case .popping, .focusCollapse, .focusPreview, .brightnessCollapse, .brightnessPreview, .volumeCollapse, .volumePreview, .networkIdle, .networkClosed, .networkPreview, .agentCollapse, .agentPreview:
             return false
         }
     }
@@ -225,6 +228,12 @@ extension ContentView {
         case .volumeCollapse:
             return 1.0
         case .volumePreview:
+            return 1.01
+        case .networkIdle:
+            return 1.0
+        case .networkClosed:
+            return 1.0
+        case .networkPreview:
             return 1.01
         case .agentCollapse:
             return 1.0

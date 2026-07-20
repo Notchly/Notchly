@@ -15,6 +15,7 @@ struct ContentView: View {
     @ObservedObject var musicManager: MusicManager
     @ObservedObject var focusManager: FocusManager
     @ObservedObject var brightnessManager: BrightnessManager
+    @ObservedObject var networkStatusManager: NetworkStatusManager
     @ObservedObject var agentEventManager: AgentEventManager
     @ObservedObject var lockScreenOverlayModel: LockScreenOverlayModel
     let animationsEnabled: Bool
@@ -48,6 +49,9 @@ struct ContentView: View {
     @State var hidesVolumeStatusContentDuringReturn = false
     @State var pendingVolumeEventTimestamp: TimeInterval?
     @State var lastVolumeStatusEventTime: TimeInterval = 0
+    @State var networkStatusTask: Task<Void, Never>?
+    @State var pendingNetworkEventTimestamp: TimeInterval?
+    @State var networkWaitsForMusicCollapse = false
     @State var musicScrollGestureState: Int = 0
     @State var lastMusicTrackSwipeTime: TimeInterval = 0
     @State var isPointerInsideIsland = false
@@ -75,6 +79,10 @@ struct ContentView: View {
     @State var musicEndWidthTask: Task<Void, Never>?
     @State var currentScreen: NSScreen?
     @State var resolvedClosedHeight: CGFloat = 36
+    @State var presentsLockIsland = false
+    @State var lockIslandWidth: CGFloat = 280
+    @State var showsOpenedLockIcon = false
+    @State var lockIslandTransitionTask: Task<Void, Never>?
     
     private func updateClosedHeight(for screen: NSScreen?) {
         guard lockScreenOverlayModel.state == .music else { return }
@@ -95,14 +103,24 @@ struct ContentView: View {
             Color.clear
                 .allowsHitTesting(false)
 
-            activeModuleView
-                .padding(.top, 0)
+            if presentsLockIsland {
+                LockScreenIslandView(
+                    islandWidth: lockIslandWidth,
+                    height: closedHeight,
+                    showOpenedLock: showsOpenedLockIcon
+                )
+                .allowsHitTesting(false)
                 .zIndex(10)
-                .scaleEffect(hoverScale)
-                .onHover { hovering in
-                    handleHover(hovering)
-                }
-                .animation(.easeInOut(duration: 0.22), value: settingsManager.showBattery)
+            } else {
+                activeModuleView
+                    .padding(.top, 0)
+                    .zIndex(10)
+                    .scaleEffect(hoverScale, anchor: .top)
+                    .onHover { hovering in
+                        handleHover(hovering)
+                    }
+                    .animation(.easeInOut(duration: 0.22), value: settingsManager.showBattery)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
@@ -123,17 +141,20 @@ struct ContentView: View {
             playPendingFocusEventIfReady()
             playPendingBrightnessEventIfReady()
             playPendingVolumeEventIfReady()
+            playPendingNetworkEventIfReady()
         }
         .onChange(of: dynamicManager.currentModule) { _, _ in
             playPendingFocusEventIfReady()
             playPendingBrightnessEventIfReady()
             playPendingVolumeEventIfReady()
+            playPendingNetworkEventIfReady()
         }
         .onChange(of: musicManager.isPlaying) { _, isPlaying in
             handleMusicPlaybackChange(isPlaying: isPlaying)
             playPendingFocusEventIfReady()
             playPendingBrightnessEventIfReady()
             playPendingVolumeEventIfReady()
+            playPendingNetworkEventIfReady()
         }
         .onChange(of: musicManager.hasNowPlayingContent) { _, hasNowPlayingContent in
             handleNowPlayingContentChange(hasNowPlayingContent)
@@ -142,8 +163,13 @@ struct ContentView: View {
             playPendingFocusEventIfReady()
             playPendingBrightnessEventIfReady()
             playPendingVolumeEventIfReady()
+            playPendingNetworkEventIfReady()
+        }
+        .onChange(of: lockScreenOverlayModel.state) { _, state in
+            handleLockScreenStateChange(state)
         }
         .onChange(of: status) { _, newValue in
+            playPendingNetworkEventIfReady()
             guard newValue != .opened else { return }
             guard showMusicVolumeControl else { return }
             showMusicVolumeControl = false
@@ -168,6 +194,10 @@ struct ContentView: View {
             guard eventID > 0 else { return }
             handleAgentEventChange(agentEventManager.currentEvent)
         }
+        .onChange(of: networkStatusManager.eventID) { _, eventID in
+            guard eventID > 0, let event = networkStatusManager.currentEvent else { return }
+            handleNetworkStatusEvent(event)
+        }
         .onChange(of: settingsManager.showFocusAnimations) { _, isEnabled in
             guard !isEnabled else { return }
             hideFocusStatusPreview()
@@ -179,6 +209,10 @@ struct ContentView: View {
         .onChange(of: settingsManager.showSoundStatus) { _, isEnabled in
             guard !isEnabled else { return }
             hideVolumeStatusPreview()
+        }
+        .onChange(of: settingsManager.showNetworkStatus) { _, isEnabled in
+            guard !isEnabled else { return }
+            hideNetworkStatusPreview()
         }
         .onChange(of: settingsManager.showBattery) { _, isEnabled in
             handleBatteryVisibilityChange(isEnabled)

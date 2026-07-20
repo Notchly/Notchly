@@ -23,10 +23,13 @@ private typealias DisplayServicesGetBrightnessFunction =
 
 @MainActor
 final class AppEnvironment {
+    private let updaterUserDriverDelegate = SparkleUserDriverDelegate()
+
     let musicManager = MusicManager()
     let settingsManager = SettingsManager()
     let focusManager = FocusManager()
     let brightnessManager = BrightnessManager()
+    let networkStatusManager = NetworkStatusManager()
     lazy var agentEventManager = AgentEventManager(settingsManager: settingsManager)
     let codexHookIntegrationManager = CodexHookIntegrationManager()
     let cursorHookIntegrationManager = CursorHookIntegrationManager()
@@ -34,10 +37,10 @@ final class AppEnvironment {
     let lockScreenWallpaperManager = LockScreenWallpaperManager()
     let whatsNewWindow = WhatsNewWindow()
 
-    let updaterController = SPUStandardUpdaterController(
+    lazy var updaterController = SPUStandardUpdaterController(
         startingUpdater: false,
         updaterDelegate: nil,
-        userDriverDelegate: nil
+        userDriverDelegate: updaterUserDriverDelegate
     )
 
     lazy var batteryManager = BatteryManager(musicManager: musicManager)
@@ -54,6 +57,12 @@ final class AppEnvironment {
         codexHookIntegrationManager: codexHookIntegrationManager,
         cursorHookIntegrationManager: cursorHookIntegrationManager
     )
+}
+
+private final class SparkleUserDriverDelegate: NSObject, SPUStandardUserDriverDelegate {
+    var supportsGentleScheduledUpdateReminders: Bool {
+        true
+    }
 }
 
 // MARK: - Brightness Manager

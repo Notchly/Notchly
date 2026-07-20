@@ -66,6 +66,14 @@ struct GeneralSettingsView: View {
 
                     SettingsDivider()
 
+                    SettingsToggleRow(
+                        title: "Network Status",
+                        subtitle: "Show Wi-Fi, Personal Hotspot, and internet availability changes.",
+                        isOn: $settingsManager.showNetworkStatus
+                    )
+
+                    SettingsDivider()
+
                     UnlockSoundSettingsRow(
                         isEnabled: $settingsManager.enableLockSound
                     )

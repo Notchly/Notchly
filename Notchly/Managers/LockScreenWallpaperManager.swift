@@ -21,7 +21,7 @@ final class LockScreenWallpaperManager {
     }
 
     private let workspace = NSWorkspace.shared
-    private let renderer = LockScreenBackdropRenderer(maximumSide: 1280)
+    private let renderer = LockScreenBackdropRenderer(maximumSide: 2560)
     private let renderQueue = DispatchQueue(
         label: "xyz.notchly.lock-screen-wallpaper",
         qos: .userInitiated
@@ -32,6 +32,7 @@ final class LockScreenWallpaperManager {
     private var originalWallpaper: OriginalWallpaper?
     private var activeArtworkURL: URL?
     private var cleanupTask: DispatchWorkItem?
+    private var restoreConfirmationTask: DispatchWorkItem?
     private var operationID = UUID()
 
     init() {
@@ -65,6 +66,8 @@ final class LockScreenWallpaperManager {
         on screen: NSScreen,
         onReadyToApply: @escaping @MainActor () -> Void = {}
     ) {
+        restoreConfirmationTask?.cancel()
+        restoreConfirmationTask = nil
         cleanupTask?.cancel()
         cleanupTask = nil
         operationID = UUID()
@@ -98,7 +101,11 @@ final class LockScreenWallpaperManager {
 
             let artworkURL = workingDirectoryURL
                 .appendingPathComponent("artwork-\(UUID().uuidString).jpg")
-            let targetSize = screen.frame.size
+            let backingScale = max(screen.backingScaleFactor, 1)
+            let targetSize = CGSize(
+                width: screen.frame.width * backingScale,
+                height: screen.frame.height * backingScale
+            )
             let targetDisplayID = displayID(for: screen)
             let renderer = renderer
 
@@ -136,7 +143,7 @@ final class LockScreenWallpaperManager {
                     }
 
                     var options = self.workspace.desktopImageOptions(for: targetScreen) ?? [:]
-                    options[.imageScaling] = NSImageScaling.scaleAxesIndependently.rawValue
+                    options[.imageScaling] = NSImageScaling.scaleProportionallyUpOrDown.rawValue
                     options[.allowClipping] = true
 
                     onReadyToApply()
@@ -175,8 +182,11 @@ final class LockScreenWallpaperManager {
     }
 
     private func restoreOriginalWallpaper() {
+        restoreConfirmationTask?.cancel()
+        restoreConfirmationTask = nil
         operationID = UUID()
-        guard let originalWallpaper,
+        let currentOperationID = operationID
+        guard let originalWallpaper = originalWallpaper ?? recoveredOriginalWallpaper(),
               let targetScreen = screen(with: originalWallpaper.displayID) else { return }
 
         do {
@@ -185,13 +195,47 @@ final class LockScreenWallpaperManager {
                 for: targetScreen,
                 options: originalWallpaper.options
             )
-            self.originalWallpaper = nil
             activeArtworkURL = nil
-            try? fileManager.removeItem(at: recoveryURL)
-            scheduleGeneratedArtworkCleanup()
+
+            let confirmationTask = DispatchWorkItem { [weak self] in
+                guard let self, self.operationID == currentOperationID,
+                      let confirmationScreen = self.screen(with: originalWallpaper.displayID) else {
+                    return
+                }
+
+                do {
+                    try self.workspace.setDesktopImageURL(
+                        originalWallpaper.url,
+                        for: confirmationScreen,
+                        options: originalWallpaper.options
+                    )
+                    self.originalWallpaper = nil
+                    try? self.fileManager.removeItem(at: self.recoveryURL)
+                    self.scheduleGeneratedArtworkCleanup()
+                } catch {
+                    print("[LockScreenWallpaper] Restore confirmation failed: \(error)")
+                }
+                self.restoreConfirmationTask = nil
+            }
+            restoreConfirmationTask = confirmationTask
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.16, execute: confirmationTask)
         } catch {
             print("[LockScreenWallpaper] Restore failed: \(error)")
         }
+    }
+
+    private func recoveredOriginalWallpaper() -> OriginalWallpaper? {
+        guard let data = try? Data(contentsOf: recoveryURL),
+              let record = try? JSONDecoder().decode(RecoveryRecord.self, from: data),
+              let url = URL(string: record.url) else {
+            return nil
+        }
+
+        return OriginalWallpaper(
+            url: url,
+            options: [:],
+            displayID: record.displayID
+        )
     }
 
     private func cancelFailedApply(operationID failedOperationID: UUID) {
@@ -251,8 +295,14 @@ final class LockScreenWallpaperManager {
 }
 
 private nonisolated final class LockScreenBackdropRenderer: @unchecked Sendable {
+    private static let outputColorSpace = CGColorSpace(name: CGColorSpace.sRGB)!
+
     private let maximumSide: CGFloat
-    private let context = CIContext(options: [.cacheIntermediates: false])
+    private let context = CIContext(options: [
+        .cacheIntermediates: false,
+        .workingColorSpace: outputColorSpace,
+        .outputColorSpace: outputColorSpace
+    ])
 
     init(maximumSide: CGFloat) {
         self.maximumSide = maximumSide
@@ -264,7 +314,12 @@ private nonisolated final class LockScreenBackdropRenderer: @unchecked Sendable 
             targetSize: targetSize,
             maximumSide: maximumSide
         )
-        guard let outputImage = context.createCGImage(composition.image, from: composition.extent),
+        guard let outputImage = context.createCGImage(
+            composition.image,
+            from: composition.extent,
+            format: .RGBA8,
+            colorSpace: Self.outputColorSpace
+        ),
               let destinationData = CFDataCreateMutable(nil, 0),
               let destination = CGImageDestinationCreateWithData(
                 destinationData,
@@ -275,7 +330,7 @@ private nonisolated final class LockScreenBackdropRenderer: @unchecked Sendable 
             return nil
         }
 
-        let properties = [kCGImageDestinationLossyCompressionQuality: 0.88] as CFDictionary
+        let properties = [kCGImageDestinationLossyCompressionQuality: 0.92] as CFDictionary
         CGImageDestinationAddImage(destination, outputImage, properties)
         guard CGImageDestinationFinalize(destination) else { return nil }
         return destinationData as Data
@@ -315,12 +370,13 @@ private nonisolated struct LockScreenBackdropComposition {
             .applyingFilter(
                 "CIColorControls",
                 parameters: [
-                    kCIInputSaturationKey: 1.14,
-                    kCIInputBrightnessKey: -0.08,
-                    kCIInputContrastKey: 1.04
+                    kCIInputSaturationKey: 0.96,
+                    kCIInputBrightnessKey: -0.05,
+                    kCIInputContrastKey: 0.98
                 ]
             )
-        let dimmingLayer = CIImage(color: CIColor(red: 0, green: 0, blue: 0, alpha: 0.20))
+            .applyingFilter("CIVibrance", parameters: ["inputAmount": -0.10])
+        let dimmingLayer = CIImage(color: CIColor(red: 0, green: 0, blue: 0, alpha: 0.18))
             .cropped(to: extent)
 
         self.image = dimmingLayer.composited(over: backdrop)
